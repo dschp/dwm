@@ -30,6 +30,7 @@ static const char *colors[][3]      = {
 static const char *tags[] = {
   "~", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "Esc",
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+  "F13", "F14", "F15"
 };
 
 static const Rule rules[] = {
@@ -140,6 +141,9 @@ static Key keys[] = {
   TAGKEYS(                        XK_F10,                    23)
   TAGKEYS(                        XK_F11,                    24)
   TAGKEYS(                        XK_F12,                    25)
+  TAGKEYS(                        XK_F13,                    26)
+  TAGKEYS(                        XK_F14,                    27)
+  TAGKEYS(                        XK_F15,                    28)
   { MODKEY|ShiftMask|ControlMask, XK_q,      quit,           {0} },
 };
 
