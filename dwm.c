@@ -54,7 +54,7 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
+#define TAGMASK                 ((1UL << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
@@ -69,7 +69,7 @@ enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
 
 typedef union {
 	int i;
-	unsigned int ui;
+	unsigned long ui;
 	float f;
 	const void *v;
 } Arg;
@@ -91,7 +91,7 @@ struct Client {
 	int oldx, oldy, oldw, oldh;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
 	int bw, oldbw;
-	unsigned int tags;
+	unsigned long tags;
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
 	Client *next;
 	Client *snext;
@@ -120,9 +120,9 @@ struct Monitor {
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
 	int wx, wy, ww, wh;   /* window area  */
-	unsigned int seltags;
-	unsigned int sellt;
-	unsigned int tagset[2];
+	unsigned long seltags;
+	unsigned long sellt;
+	unsigned long tagset[2];
 	int showbar;
 	int topbar;
 	Client *clients;
@@ -138,7 +138,7 @@ typedef struct {
 	const char *class;
 	const char *instance;
 	const char *title;
-	unsigned int tags;
+	unsigned long tags;
 	int isfloating;
 	int monitor;
 } Rule;
@@ -186,10 +186,10 @@ static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
-static unsigned int nexttag(void);
+static unsigned long nexttag(void);
 static Client *nexttiled(Client *c);
 static void pop(Client *c);
-static unsigned int prevtag(void);
+static unsigned long prevtag(void);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -280,16 +280,16 @@ static Window root, wmcheckwin;
 #include "config.h"
 
 struct Pertag {
-	unsigned int curtag, prevtag; /* current and previous tag */
+	unsigned long curtag, prevtag; /* current and previous tag */
 	int nmasters[LENGTH(tags) + 1]; /* number of windows in master area */
 	float mfacts[LENGTH(tags) + 1]; /* mfacts per tag */
-	unsigned int sellts[LENGTH(tags) + 1]; /* selected layouts */
+	unsigned long sellts[LENGTH(tags) + 1]; /* selected layouts */
 	const Layout *ltidxs[LENGTH(tags) + 1][2]; /* matrix of tags and layouts indexes  */
 	int showbars[LENGTH(tags) + 1]; /* display bar for the current tag */
 };
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
-struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
+struct NumTags { char limitexceeded[LENGTH(tags) > 63 ? -1 : 1]; };
 
 /* function implementations */
 void
@@ -455,7 +455,7 @@ buttonpress(XEvent *e)
 		while (ev->x >= x && ++i < LENGTH(tags));
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
-			arg.ui = 1 << i;
+			arg.ui = 1UL << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
 		else if (ev->x > selmon->ww - (int)TEXTW(stext))
@@ -733,7 +733,7 @@ drawbar(Monitor *m)
 	int x, w, tw = 0;
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
-	unsigned int i, occ = 0, urg = 0;
+	unsigned long i, occ = 0, urg = 0;
 	char *ts = stext;
 	char *tp = stext;
 	int tx = 0;
@@ -778,12 +778,12 @@ drawbar(Monitor *m)
 	x = 0;
 	for (i = 0; i < LENGTH(tags); i++) {
 		w = TEXTW(tags[i]);
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
-		if (occ & 1 << i)
+		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1UL << i ? SchemeSel : SchemeNorm]);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1UL << i);
+		if (occ & 1UL << i)
 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-				urg & 1 << i);
+				m == selmon && selmon->sel && selmon->sel->tags & 1UL << i,
+				urg & 1UL << i);
 		x += w;
 	}
 	w = TEXTW(m->ltsymbol);
@@ -1258,11 +1258,11 @@ movemouse(const Arg *arg)
 	}
 }
 
-unsigned int
+unsigned long
 nexttag(void)
 {
-	unsigned int seltag = selmon->tagset[selmon->seltags];
-	return seltag == (1 << (LENGTH(tags) - 1)) ? 1 : seltag << 1;
+	unsigned long seltag = selmon->tagset[selmon->seltags];
+	return seltag == (1UL << (LENGTH(tags) - 1)) ? 1 : seltag << 1;
 }
 
 Client *
@@ -1281,11 +1281,11 @@ pop(Client *c)
 	arrange(c->mon);
 }
 
-unsigned int
+unsigned long
 prevtag(void)
 {
-	unsigned int seltag = selmon->tagset[selmon->seltags];
-	return seltag == 1 ? (1 << (LENGTH(tags) - 1)) : seltag >> 1;
+	unsigned long seltag = selmon->tagset[selmon->seltags];
+	return seltag == 1 ? (1UL << (LENGTH(tags) - 1)) : seltag >> 1;
 }
 
 void
@@ -1757,7 +1757,7 @@ tagmon(const Arg *arg)
 void
 tagtonext(const Arg *arg)
 {
-	unsigned int tmp;
+	unsigned long tmp;
 
 	if (selmon->sel == NULL)
 		return;
@@ -1770,7 +1770,7 @@ tagtonext(const Arg *arg)
 void
 tagtoprev(const Arg *arg)
 {
-	unsigned int tmp;
+	unsigned long tmp;
 
 	if (selmon->sel == NULL)
 		return;
@@ -1834,7 +1834,7 @@ togglefloating(const Arg *arg)
 void
 toggletag(const Arg *arg)
 {
-	unsigned int newtags;
+	unsigned long newtags;
 
 	if (!selmon->sel)
 		return;
@@ -1849,7 +1849,7 @@ toggletag(const Arg *arg)
 void
 toggleview(const Arg *arg)
 {
-	unsigned int newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
+	unsigned long newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
 	int i;
 
 	if (newtagset) {
@@ -1861,9 +1861,9 @@ toggleview(const Arg *arg)
 		}
 
 		/* test if the user did not select the same tag */
-		if (!(newtagset & 1 << (selmon->pertag->curtag - 1))) {
+		if (!(newtagset & 1UL << (selmon->pertag->curtag - 1))) {
 			selmon->pertag->prevtag = selmon->pertag->curtag;
-			for (i = 0; !(newtagset & 1 << i); i++) ;
+			for (i = 0; !(newtagset & 1UL << i); i++) ;
 			selmon->pertag->curtag = i + 1;
 		}
 
@@ -2074,7 +2074,7 @@ updatenumlockmask(void)
 		for (j = 0; j < modmap->max_keypermod; j++)
 			if (modmap->modifiermap[i * modmap->max_keypermod + j]
 				== XKeysymToKeycode(dpy, XK_Num_Lock))
-				numlockmask = (1 << i);
+				numlockmask = (1UL << i);
 	XFreeModifiermap(modmap);
 }
 
@@ -2174,7 +2174,7 @@ void
 view(const Arg *arg)
 {
 	int i;
-	unsigned int tmptag;
+	unsigned long tmptag;
 
 	if ((arg->ui & TAGMASK) == selmon->tagset[selmon->seltags])
 		return;
@@ -2186,7 +2186,7 @@ view(const Arg *arg)
 		if (arg->ui == ~0)
 			selmon->pertag->curtag = 0;
 		else {
-			for (i = 0; !(arg->ui & 1 << i); i++) ;
+			for (i = 0; !(arg->ui & 1UL << i); i++) ;
 			selmon->pertag->curtag = i + 1;
 		}
 	} else {
@@ -2296,6 +2296,55 @@ zoom(const Arg *arg)
 	if (c == nexttiled(selmon->clients) && !(c = nexttiled(c->next)))
 		return;
 	pop(c);
+}
+
+void
+movestack(const Arg *arg) {
+  Client *c = NULL, *p = NULL, *pc = NULL, *i;
+
+  if(arg->i > 0) {
+    /* find the client after selmon->sel */
+    for(c = selmon->sel->next; c && (!ISVISIBLE(c) || c->isfloating); c = c->next);
+    if(!c)
+      for(c = selmon->clients; c && (!ISVISIBLE(c) || c->isfloating); c = c->next);
+
+  }
+  else {
+    /* find the client before selmon->sel */
+    for(i = selmon->clients; i != selmon->sel; i = i->next)
+      if(ISVISIBLE(i) && !i->isfloating)
+	c = i;
+    if(!c)
+      for(; i; i = i->next)
+	if(ISVISIBLE(i) && !i->isfloating)
+	  c = i;
+  }
+  /* find the client before selmon->sel and c */
+  for(i = selmon->clients; i && (!p || !pc); i = i->next) {
+    if(i->next == selmon->sel)
+      p = i;
+    if(i->next == c)
+      pc = i;
+  }
+
+  /* swap c and selmon->sel selmon->clients in the selmon->clients list */
+  if(c && c != selmon->sel) {
+    Client *temp = selmon->sel->next==c?selmon->sel:selmon->sel->next;
+    selmon->sel->next = c->next==selmon->sel?c:c->next;
+    c->next = temp;
+
+    if(p && p != c)
+      p->next = c;
+    if(pc && pc != selmon->sel)
+      pc->next = selmon->sel;
+
+    if(selmon->sel == selmon->clients)
+      selmon->clients = c;
+    else if(c == selmon->clients)
+      selmon->clients = selmon->sel;
+
+    arrange(selmon);
+  }
 }
 
 int
