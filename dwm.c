@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -54,7 +55,7 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1UL << LENGTH(tags)) - 1)
+#define TAGMASK                 ((1ULL << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
@@ -91,7 +92,7 @@ struct Client {
 	int oldx, oldy, oldw, oldh;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
 	int bw, oldbw;
-	unsigned long tags;
+	uint64_t tags;
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
 	Client *next;
 	Client *snext;
@@ -120,9 +121,9 @@ struct Monitor {
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
 	int wx, wy, ww, wh;   /* window area  */
-	unsigned long seltags;
-	unsigned long sellt;
-	unsigned long tagset[2];
+	uint64_t seltags;
+	uint64_t sellt;
+	uint64_t tagset[2];
 	int showbar;
 	int topbar;
 	Client *clients;
@@ -138,7 +139,7 @@ typedef struct {
 	const char *class;
 	const char *instance;
 	const char *title;
-	unsigned long tags;
+	uint64_t tags;
 	int isfloating;
 	int monitor;
 } Rule;
@@ -271,10 +272,10 @@ static Window root, wmcheckwin;
 #include "config.h"
 
 struct Pertag {
-	unsigned long curtag, prevtag; /* current and previous tag */
+	uint64_t curtag, prevtag; /* current and previous tag */
 	int nmasters[LENGTH(tags) + 1]; /* number of windows in master area */
 	float mfacts[LENGTH(tags) + 1]; /* mfacts per tag */
-	unsigned long sellts[LENGTH(tags) + 1]; /* selected layouts */
+	uint64_t sellts[LENGTH(tags) + 1]; /* selected layouts */
 	const Layout *ltidxs[LENGTH(tags) + 1][2]; /* matrix of tags and layouts indexes  */
 	int showbars[LENGTH(tags) + 1]; /* display bar for the current tag */
 };
@@ -446,7 +447,7 @@ buttonpress(XEvent *e)
 		while (ev->x >= x && ++i < LENGTH(tags));
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
-			arg.ui = 1UL << i;
+			arg.ui = 1ULL << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
 		else if (ev->x > selmon->ww - (int)TEXTW(stext))
@@ -709,7 +710,7 @@ drawbar(Monitor *m)
 	int x, w, tw = 0;
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
-	unsigned long i, occ = 0, urg = 0;
+	uint64_t i, occ = 0ULL, urg = 0ULL;
 	char *ts = stext;
 	char *tp = stext;
 	int tx = 0;
@@ -754,12 +755,12 @@ drawbar(Monitor *m)
 	x = 0;
 	for (i = 0; i < LENGTH(tags); i++) {
 		w = TEXTW(tags[i]);
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1UL << i ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1UL << i);
-		if (occ & 1UL << i)
+		drw_setscheme(drw, scheme[m->tagset[m->seltags] >> i & 1 ? SchemeSel : SchemeNorm]);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg >> i & 1);
+		if (occ >> i & 1)
 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags & 1UL << i,
-				urg & 1UL << i);
+				m == selmon && selmon->sel && selmon->sel->tags >> i & 1,
+				urg >> i & 1);
 		x += w;
 	}
 	w = TEXTW(m->ltsymbol);
@@ -883,7 +884,7 @@ Atom
 getatomprop(Client *c, Atom prop)
 {
 	int di;
-	unsigned long dl;
+	uint64_t dl;
 	unsigned char *p = NULL;
 	Atom da, atom = None;
 
@@ -911,7 +912,7 @@ getstate(Window w)
 	int format;
 	long result = -1;
 	unsigned char *p = NULL;
-	unsigned long n, extra;
+	uint64_t n, extra;
 	Atom real;
 
 	if (XGetWindowProperty(dpy, w, wmatom[WMState], 0L, 2L, False, wmatom[WMState],
@@ -1748,7 +1749,7 @@ togglefloating(const Arg *arg)
 void
 toggletag(const Arg *arg)
 {
-	unsigned long newtags;
+	uint64_t newtags;
 
 	if (!selmon->sel)
 		return;
@@ -1763,7 +1764,7 @@ toggletag(const Arg *arg)
 void
 toggleview(const Arg *arg)
 {
-	unsigned long newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
+	uint64_t newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
 	int i;
 
 	if (newtagset) {
@@ -1775,9 +1776,9 @@ toggleview(const Arg *arg)
 		}
 
 		/* test if the user did not select the same tag */
-		if (!(newtagset & 1UL << (selmon->pertag->curtag - 1))) {
+		if (!(newtagset & 1ULL << (selmon->pertag->curtag - 1))) {
 			selmon->pertag->prevtag = selmon->pertag->curtag;
-			for (i = 0; !(newtagset & 1UL << i); i++) ;
+			for (i = 0; !(newtagset >> i & 1); i++) ;
 			selmon->pertag->curtag = i + 1;
 		}
 
@@ -1988,7 +1989,7 @@ updatenumlockmask(void)
 		for (j = 0; j < modmap->max_keypermod; j++)
 			if (modmap->modifiermap[i * modmap->max_keypermod + j]
 				== XKeysymToKeycode(dpy, XK_Num_Lock))
-				numlockmask = (1UL << i);
+				numlockmask = (1ULL << i);
 	XFreeModifiermap(modmap);
 }
 
@@ -2088,7 +2089,7 @@ void
 view(const Arg *arg)
 {
 	int i;
-	unsigned long tmptag;
+	uint64_t tmptag;
 
 	if ((arg->ui & TAGMASK) == selmon->tagset[selmon->seltags])
 		return;
@@ -2100,7 +2101,7 @@ view(const Arg *arg)
 		if (arg->ui == ~0)
 			selmon->pertag->curtag = 0;
 		else {
-			for (i = 0; !(arg->ui & 1UL << i); i++) ;
+			for (i = 0; !(arg->ui >> i & 1); i++) ;
 			selmon->pertag->curtag = i + 1;
 		}
 	} else {
