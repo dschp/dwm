@@ -162,14 +162,12 @@ static Monitor *createmon(void);
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
-static Monitor *dirtomon(int dir);
 static void drawbar(Monitor *m);
 static void drawbars(void);
 static void enternotify(XEvent *e);
 static void expose(XEvent *e);
 static void focus(Client *c);
 static void focusin(XEvent *e);
-static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
@@ -186,10 +184,8 @@ static void maprequest(XEvent *e);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
-static unsigned long nexttag(void);
 static Client *nexttiled(Client *c);
 static void pop(Client *c);
-static unsigned long prevtag(void);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -211,9 +207,6 @@ static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
-static void tagmon(const Arg *arg);
-static void tagtonext(const Arg *arg);
-static void tagtoprev(const Arg *arg);
 static void tile(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
@@ -233,8 +226,6 @@ static void updatetitle(Client *c);
 static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
-static void viewnext(const Arg *arg);
-static void viewprev(const Arg *arg);
 static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
@@ -712,21 +703,6 @@ detachstack(Client *c)
 	}
 }
 
-Monitor *
-dirtomon(int dir)
-{
-	Monitor *m = NULL;
-
-	if (dir > 0) {
-		if (!(m = selmon->next))
-			m = mons;
-	} else if (selmon == mons)
-		for (m = mons; m->next; m = m->next);
-	else
-		for (m = mons; m->next != selmon; m = m->next);
-	return m;
-}
-
 void
 drawbar(Monitor *m)
 {
@@ -875,20 +851,6 @@ focusin(XEvent *e)
 
 	if (selmon->sel && ev->window != selmon->sel->win)
 		setfocus(selmon->sel);
-}
-
-void
-focusmon(const Arg *arg)
-{
-	Monitor *m;
-
-	if (!mons->next)
-		return;
-	if ((m = dirtomon(arg->i)) == selmon)
-		return;
-	unfocus(selmon->sel, 0);
-	selmon = m;
-	focus(NULL);
 }
 
 void
@@ -1258,13 +1220,6 @@ movemouse(const Arg *arg)
 	}
 }
 
-unsigned long
-nexttag(void)
-{
-	unsigned long seltag = selmon->tagset[selmon->seltags];
-	return seltag == (1UL << (LENGTH(tags) - 1)) ? 1 : seltag << 1;
-}
-
 Client *
 nexttiled(Client *c)
 {
@@ -1279,13 +1234,6 @@ pop(Client *c)
 	attach(c);
 	focus(c);
 	arrange(c->mon);
-}
-
-unsigned long
-prevtag(void)
-{
-	unsigned long seltag = selmon->tagset[selmon->seltags];
-	return seltag == 1 ? (1UL << (LENGTH(tags) - 1)) : seltag >> 1;
 }
 
 void
@@ -1747,40 +1695,6 @@ tag(const Arg *arg)
 }
 
 void
-tagmon(const Arg *arg)
-{
-	if (!selmon->sel || !mons->next)
-		return;
-	sendmon(selmon->sel, dirtomon(arg->i));
-}
-
-void
-tagtonext(const Arg *arg)
-{
-	unsigned long tmp;
-
-	if (selmon->sel == NULL)
-		return;
-
-	tmp = nexttag();
-	tag(&(const Arg){.ui = tmp });
-	view(&(const Arg){.ui = tmp });
-}
-
-void
-tagtoprev(const Arg *arg)
-{
-	unsigned long tmp;
-
-	if (selmon->sel == NULL)
-		return;
-
-	tmp = prevtag();
-	tag(&(const Arg){.ui = tmp });
-	view(&(const Arg){.ui = tmp });
-}
-
-void
 tile(Monitor *m)
 {
 	unsigned int i, n, h, mw, my, ty;
@@ -2206,18 +2120,6 @@ view(const Arg *arg)
 
 	focus(NULL);
 	arrange(selmon);
-}
-
-void
-viewnext(const Arg *arg)
-{
-	view(&(const Arg){.ui = nexttag()});
-}
-
-void
-viewprev(const Arg *arg)
-{
-	view(&(const Arg){.ui = prevtag()});
 }
  
 Client *
