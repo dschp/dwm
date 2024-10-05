@@ -756,12 +756,14 @@ drawbar(Monitor *m)
 	for (i = 0; i < LENGTH(tags); i++) {
 		w = TEXTW(tags[i]);
 		drw_setscheme(drw, scheme[m->tagset[m->seltags] >> i & 1 ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg >> i & 1);
-		if (occ >> i & 1)
+		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1);
+		if (occ & 1)
 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
 				m == selmon && selmon->sel && selmon->sel->tags >> i & 1,
-				urg >> i & 1);
+				urg & 1);
 		x += w;
+		occ >>= 1;
+		urg >>= 1;
 	}
 	w = TEXTW(m->ltsymbol);
 	drw_setscheme(drw, scheme[SchemeNorm]);
@@ -1778,7 +1780,8 @@ toggleview(const Arg *arg)
 		/* test if the user did not select the same tag */
 		if (!(newtagset & 1ULL << (selmon->pertag->curtag - 1))) {
 			selmon->pertag->prevtag = selmon->pertag->curtag;
-			for (i = 0; !(newtagset >> i & 1); i++) ;
+			uint64_t tmptag = newtagset;
+			for (i = 0; !(tmptag & 1); i++) tmptag >>= 1;
 			selmon->pertag->curtag = i + 1;
 		}
 
@@ -2101,7 +2104,8 @@ view(const Arg *arg)
 		if (arg->ui == ~0)
 			selmon->pertag->curtag = 0;
 		else {
-			for (i = 0; !(arg->ui >> i & 1); i++) ;
+			tmptag = arg->ui;
+			for (i = 0; !(tmptag & 1); i++) tmptag >>= 1;
 			selmon->pertag->curtag = i + 1;
 		}
 	} else {
