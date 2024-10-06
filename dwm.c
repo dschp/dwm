@@ -70,7 +70,7 @@ enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
 
 typedef union {
 	int i;
-	unsigned long ui;
+	uint64_t ui;
 	float f;
 	const void *v;
 } Arg;
@@ -707,80 +707,107 @@ detachstack(Client *c)
 void
 drawbar(Monitor *m)
 {
-	int x, w, tw = 0;
-	int boxs = drw->fonts->h / 9;
-	int boxw = drw->fonts->h / 6 + 2;
-	uint64_t i, occ = 0ULL, urg = 0ULL;
-	char *ts = stext;
-	char *tp = stext;
-	int tx = 0;
-	char ctmp;
-	Client *c;
+  int x = 0, w = 0, tw = 0;
+  int boxs = drw->fonts->h / 9;
+  int boxw = drw->fonts->h / 6 + 2;
+  uint64_t i, occ = 0ULL, urg = 0ULL;
+  Client *c;
 
-	if (!m->showbar)
-		return;
+  if (!m->showbar)
+    return;
 
-	/* draw status first so it can be overdrawn by tags later */
-	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
+  /* draw status first so it can be overdrawn by tags later */
+  if (m == selmon) { /* status is only drawn on selected monitor */
+    char buf[sizeof(stext)];
+    char *p1 = stext, *p2 = buf;
+    while (*p1 != '\0') {
+      if (*p1 == '\1') {
+        p1++;
+        if (*p1 == '\0') break;
+        p1++;
+      } else {
+        *p2++ = *p1++;
+      }
+    }
+    *p2 = '\0';
 
-		tw = TEXTW(stext) - lrpad + 4; /* 2px right padding */
-		int cnt = 0;
-		for (;*ts != '\0'; ts++) {
-			if ((unsigned int)*ts <= LENGTH(colors)) {
-				cnt++;
-			}
-		}
-		tw -= cnt;
+    const size_t status_lrpad = 4;
+    tw = TEXTW(buf) - lrpad + (status_lrpad * 2);
 
-		ts = stext;
-		while (1) {
-			if ((unsigned int)*ts > LENGTH(colors)) { ts++; continue ; }
-			ctmp = *ts;
-			*ts = '\0';
-			drw_text(drw, m->ww - tw + tx, 0, tw - tx, bh, 0, tp, 0);
-			tx += TEXTW(tp) -lrpad + 2;
-			if (ctmp == '\0') { break; }
-			drw_setscheme(drw, scheme[(unsigned int)(ctmp-1)]);
-			*ts = ctmp;
-			tp = ++ts;
-		}
-	}
+    drw_setscheme(drw, scheme[SchemeNorm]);
+    drw_text(drw, m->ww - tw, 0, lrpad / 2, bh, status_lrpad, "", 0);
+    x += status_lrpad;
 
-	for (c = m->clients; c; c = c->next) {
-		occ |= c->tags;
-		if (c->isurgent)
-			urg |= c->tags;
-	}
-	x = 0;
-	for (i = 0; i < LENGTH(tags); i++) {
-		w = TEXTW(tags[i]);
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] >> i & 1 ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1);
-		if (occ & 1)
-			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags >> i & 1,
-				urg & 1);
-		x += w;
-		occ >>= 1;
-		urg >>= 1;
-	}
-	w = TEXTW(m->ltsymbol);
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+    p1 = stext;
+    p2 = buf;
+    while (1) {
+      if (*p1 == '\0' || *p1 == '\1') {
+        if (p2 != buf) {
+          *p2 = '\0';
+          drw_text(drw, m->ww - tw + x, 0, tw - x, bh, 0, buf, 0);
+          x += TEXTW(buf) - lrpad;
+          p2 = buf;
+        }
 
-	if ((w = m->ww - tw - x) > bh) {
-		if (m->sel) {
-			drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
-			drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
-			if (m->sel->isfloating)
-				drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
-		} else {
-			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_rect(drw, x, 0, w, bh, 1, 1);
-		}
-	}
-	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
+        if (*p1 == '\0') break;
+        p1++;
+        if (*p1 == '\0') break;
+
+        size_t scheme_idx = (size_t) *p1 - 1;
+        if (scheme_idx < LENGTH(colors)) {
+          drw_setscheme(drw, scheme[scheme_idx]);
+        } else {
+          drw_setscheme(drw, scheme[SchemeNorm]);
+        }
+        p1++;
+      } else {
+        *p2++ = *p1++;
+      }
+    }
+  }
+
+  for (c = m->clients; c; c = c->next) {
+    occ |= c->tags;
+    if (c->isurgent)
+      urg |= c->tags;
+  }
+
+  x = 0;
+  for (i = 0; i < LENGTH(tags); i++) {
+    uint8_t selected = m->tagset[m->seltags] >> i & 1;
+    uint8_t has_client = occ & 1;
+    uint8_t is_urgent = urg & 1;
+    if (selected || has_client) {
+      w = TEXTW(tags[i]);
+      drw_setscheme(drw, scheme[selected ? SchemeSel : SchemeNorm]);
+      drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], is_urgent);
+      if (has_client) {
+	drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		 m == selmon && selmon->sel && selmon->sel->tags >> i & 1,
+		 is_urgent);
+      }
+      x += w;
+    }
+    occ >>= 1;
+    urg >>= 1;
+  }
+
+  w = TEXTW(m->ltsymbol);
+  drw_setscheme(drw, scheme[SchemeNorm]);
+  x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+
+  if ((w = m->ww - tw - x) > bh) {
+    if (m->sel) {
+      drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
+      drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
+      if (m->sel->isfloating)
+        drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
+    } else {
+      drw_setscheme(drw, scheme[SchemeNorm]);
+      drw_rect(drw, x, 0, w, bh, 1, 1);
+    }
+  }
+  drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
 
 void
