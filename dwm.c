@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -53,7 +54,7 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
+#define TAGMASK                 ((1ULL << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
@@ -68,7 +69,7 @@ enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
 
 typedef union {
 	int i;
-	unsigned int ui;
+	uint64_t ui;
 	float f;
 	const void *v;
 } Arg;
@@ -84,18 +85,19 @@ typedef struct {
 typedef struct Monitor Monitor;
 typedef struct Client Client;
 struct Client {
-	char name[256];
-	float mina, maxa;
-	int x, y, w, h;
-	int oldx, oldy, oldw, oldh;
-	int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
-	int bw, oldbw;
-	unsigned int tags;
-	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
-	Client *next;
-	Client *snext;
-	Monitor *mon;
-	Window win;
+  char name[256];
+  float mina, maxa;
+  int x, y, w, h;
+  int oldx, oldy, oldw, oldh;
+  int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
+  int bw, oldbw;
+  uint64_t tags;
+  int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen, ismaximized;
+  int origx, origy, origw, origh;
+  Client *next;
+  Client *snext;
+  Monitor *mon;
+  Window win;
 };
 
 typedef struct {
@@ -118,9 +120,9 @@ struct Monitor {
 	int by;               /* bar geometry */
 	int mx, my, mw, mh;   /* screen size */
 	int wx, wy, ww, wh;   /* window area  */
-	unsigned int seltags;
-	unsigned int sellt;
-	unsigned int tagset[2];
+	uint8_t seltags;
+	uint8_t sellt;
+	uint64_t tagset[2];
 	int showbar;
 	int topbar;
 	Client *clients;
@@ -135,7 +137,7 @@ typedef struct {
 	const char *class;
 	const char *instance;
 	const char *title;
-	unsigned int tags;
+	uint64_t tags;
 	int isfloating;
 	int monitor;
 } Rule;
@@ -148,6 +150,7 @@ static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
 static void buttonpress(XEvent *e);
+static void centerwindow(const Arg *arg);
 static void checkotherwm(void);
 static void cleanup(void);
 static void cleanupmon(Monitor *mon);
@@ -166,7 +169,7 @@ static void enternotify(XEvent *e);
 static void expose(XEvent *e);
 static void focus(Client *c);
 static void focusin(XEvent *e);
-static void focusmon(const Arg *arg);
+//static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
@@ -174,13 +177,14 @@ static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
-static void incnmaster(const Arg *arg);
+//static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
-static void monocle(Monitor *m);
+static void maximize(const Arg *arg);
+//static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
@@ -189,6 +193,10 @@ static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
+static void resizebykey_x(const Arg *arg);
+static void resizebykey_y(const Arg *arg);
+static void resizebykey_w(const Arg *arg);
+static void resizebykey_h(const Arg *arg);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
 static void restack(Monitor *m);
@@ -199,15 +207,17 @@ static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
-static void setlayout(const Arg *arg);
-static void setmfact(const Arg *arg);
+//static void setlayout(const Arg *arg);
+//static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
+static void snapandcenter_x(const Arg *arg);
+static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
-static void tagmon(const Arg *arg);
-static void tile(Monitor *m);
+//static void tagmon(const Arg *arg);
+//static void tile(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggletag(const Arg *arg);
@@ -231,7 +241,7 @@ static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
 static int xerrorstart(Display *dpy, XErrorEvent *ee);
-static void zoom(const Arg *arg);
+//static void zoom(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
@@ -271,7 +281,7 @@ static Window root, wmcheckwin;
 #include "config.h"
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
-struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
+struct NumTags { char limitexceeded[LENGTH(tags) > 63 ? -1 : 1]; };
 
 /* function implementations */
 void
@@ -437,7 +447,7 @@ buttonpress(XEvent *e)
 		while (ev->x >= x && ++i < LENGTH(tags));
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
-			arg.ui = 1 << i;
+			arg.ui = 1ULL << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
 		else if (ev->x > selmon->ww - (int)TEXTW(stext))
@@ -454,6 +464,18 @@ buttonpress(XEvent *e)
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 		&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
 			buttons[i].func(click == ClkTagBar && buttons[i].arg.i == 0 ? &arg : &buttons[i].arg);
+}
+
+void
+centerwindow(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x = (selmon->ww - c->w) / 2;
+    int y = (selmon->wh - c->h) / 2;
+
+    resize(c, x, y, c->w, c->h, 0);
+  }
 }
 
 void
@@ -697,54 +719,103 @@ dirtomon(int dir)
 void
 drawbar(Monitor *m)
 {
-	int x, w, tw = 0;
-	int boxs = drw->fonts->h / 9;
-	int boxw = drw->fonts->h / 6 + 2;
-	unsigned int i, occ = 0, urg = 0;
-	Client *c;
+  int x = 0, w = 0, tw = 0;
+  int boxs = drw->fonts->h / 9;
+  int boxw = drw->fonts->h / 6 + 2;
+  uint64_t i, occ = 0ULL, urg = 0ULL;
+  Client *c;
 
-	if (!m->showbar)
-		return;
+  if (!m->showbar)
+    return;
 
-	/* draw status first so it can be overdrawn by tags later */
-	if (m == selmon) { /* status is only drawn on selected monitor */
-		drw_setscheme(drw, scheme[SchemeNorm]);
-		tw = TEXTW(stext) - lrpad + 2; /* 2px right padding */
-		drw_text(drw, m->ww - tw, 0, tw, bh, 0, stext, 0);
-	}
+  /* draw status first so it can be overdrawn by tags later */
+  if (m == selmon) { /* status is only drawn on selected monitor */
+    char buf[sizeof(stext)];
+    char *p1 = stext, *p2 = buf;
+    while (*p1 != '\0') {
+      if (*p1 == '\1') {
+        p1++;
+        if (*p1 == '\0') break;
+        p1++;
+      } else {
+        *p2++ = *p1++;
+      }
+    }
+    *p2 = '\0';
 
-	for (c = m->clients; c; c = c->next) {
-		occ |= c->tags;
-		if (c->isurgent)
-			urg |= c->tags;
-	}
-	x = 0;
-	for (i = 0; i < LENGTH(tags); i++) {
-		w = TEXTW(tags[i]);
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
-		if (occ & 1 << i)
-			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-				urg & 1 << i);
-		x += w;
-	}
-	w = TEXTW(m->ltsymbol);
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+    const size_t status_lrpad = 4;
+    tw = TEXTW(buf) - lrpad + (status_lrpad * 2);
 
-	if ((w = m->ww - tw - x) > bh) {
-		if (m->sel) {
-			drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
-			drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
-			if (m->sel->isfloating)
-				drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
-		} else {
-			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_rect(drw, x, 0, w, bh, 1, 1);
-		}
-	}
-	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
+    drw_setscheme(drw, scheme[SchemeNorm]);
+    drw_text(drw, m->ww - tw, 0, lrpad / 2, bh, status_lrpad, "", 0);
+    x += status_lrpad;
+
+    p1 = stext;
+    p2 = buf;
+    while (1) {
+      if (*p1 == '\0' || *p1 == '\1') {
+        if (p2 != buf) {
+          *p2 = '\0';
+          drw_text(drw, m->ww - tw + x, 0, tw - x, bh, 0, buf, 0);
+          x += TEXTW(buf) - lrpad;
+          p2 = buf;
+        }
+
+        if (*p1 == '\0') break;
+        p1++;
+        if (*p1 == '\0') break;
+
+        size_t scheme_idx = (size_t) *p1 - 1;
+        if (scheme_idx < LENGTH(colors)) {
+          drw_setscheme(drw, scheme[scheme_idx]);
+        } else {
+          drw_setscheme(drw, scheme[SchemeNorm]);
+        }
+        p1++;
+      } else {
+        *p2++ = *p1++;
+      }
+    }
+  }
+
+  for (c = m->clients; c; c = c->next) {
+    occ |= c->tags;
+    if (c->isurgent)
+      urg |= c->tags;
+  }
+
+  x = 0;
+  for (i = 0; i < LENGTH(tags); i++) {
+    uint8_t selected = m->tagset[m->seltags] >> i & 1;
+    uint8_t has_client = occ & 1;
+    uint8_t is_urgent = urg & 1;
+    if (selected || has_client) {
+      w = TEXTW(tags[i]);
+      drw_setscheme(drw, scheme[selected ? SchemeSel : SchemeNorm]);
+      drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], is_urgent);
+      if (has_client) {
+	drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		 m == selmon && selmon->sel && selmon->sel->tags >> i & 1,
+		 is_urgent);
+      }
+      x += w;
+    }
+    occ >>= 1;
+    urg >>= 1;
+  }
+
+  if ((w = m->ww - tw - x) > bh) {
+    if (m->sel) {
+      drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
+      drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
+      if (m->sel->isfloating)
+        drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
+    } else {
+      drw_setscheme(drw, scheme[SchemeNorm]);
+      drw_rect(drw, x, 0, w, bh, 1, 1);
+    }
+  }
+  drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
 
 void
@@ -1110,6 +1181,31 @@ maprequest(XEvent *e)
 }
 
 void
+maximize(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    switch (c->ismaximized) {
+    case 1:
+      resize(c, selmon->wx, selmon->wy, selmon->mw - 2 * c->bw, selmon->mh - 2 * c->bw, 0);
+      c->ismaximized = 2;
+      break;
+    case 2:
+      resize(c, c->origx, c->origy, c->origw, c->origh, 0);
+      c->ismaximized = 0;
+      break;
+    default:
+      c->origx = c->x;
+      c->origy = c->y;
+      c->origw = c->w;
+      c->origh = c->h;
+      resize(c, selmon->wx, selmon->wy, selmon->ww - 2 * c->bw, selmon->wh - 2 * c->bw, 0);
+      c->ismaximized = 1;
+    }
+  }
+}
+
+void
 monocle(Monitor *m)
 {
 	unsigned int n = 0;
@@ -1279,6 +1375,72 @@ resize(Client *c, int x, int y, int w, int h, int interact)
 {
 	if (applysizehints(c, &x, &y, &w, &h, interact))
 		resizeclient(c, x, y, w, h);
+}
+
+void
+resizebykey_x(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x;
+    if (arg->f < 0.0) {
+      x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
+    } else {
+      x = MIN(c->x + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - c->w - 2 * c->bw);
+    }
+    resize(c, x, c->y, c->w, c->h, 0);
+  }
+}
+
+void
+resizebykey_y(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int y;
+    if (arg->f < 0.0) {
+      y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
+    } else {
+      y = MIN(c->y + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - c->h - 2 * c->bw);
+    }
+    resize(c, c->x, y, c->w, c->h, 0);
+  }
+}
+
+void
+resizebykey_w(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x = c->x;
+    int w;
+    if (arg->f < 0.0) {
+      w = MAX(c->w + ((int) selmon->ww * MAX(arg->f, -1.0)), 100);
+    } else {
+      w = MIN(c->w + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - 2 * c->bw);
+      int diff = (x + w) - (selmon->ww - 2 * c->bw);
+      if (diff > 0) x -= diff;
+    }
+    resize(c, x, c->y, w, c->h, 0);
+  }
+}
+
+void
+resizebykey_h(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int y = c->y;
+    int h;
+    if (arg->f < 0.0) {
+      h = MAX(c->h + ((int) selmon->wh * MAX(arg->f, -1.0)), 100);
+    } else {
+      h = MIN(c->h + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - 2 * c->bw);
+      int diff = (y + h) - (selmon->wh - 2 * c->bw);
+      if (diff > 0) y -= diff;
+    }
+    resize(c, c->x, y, c->w, h, 0);
+  }
 }
 
 void
@@ -1644,6 +1806,40 @@ showhide(Client *c)
 }
 
 void
+snapandcenter_x(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x;
+    if (arg->i < 0) {
+      x = selmon->wx;
+    } else {
+      x = selmon->ww - c->w - 2 * c->bw;
+    }
+    int y = (selmon->wh - c->h) / 2;
+
+    resize(c, x, y, c->w, c->h, 0);
+  }
+}
+
+void
+snapandcenter_y(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x = (selmon->ww - c->w) / 2;
+    int y;
+    if (arg->i < 0) {
+      y = selmon->wy;
+    } else {
+      y = selmon->wh - c->h - 2 * c->bw;
+    }
+
+    resize(c, x, y, c->w, c->h, 0);
+  }
+}
+
+void
 spawn(const Arg *arg)
 {
 	struct sigaction sa;
@@ -1737,7 +1933,7 @@ togglefloating(const Arg *arg)
 void
 toggletag(const Arg *arg)
 {
-	unsigned int newtags;
+	uint64_t newtags;
 
 	if (!selmon->sel)
 		return;
@@ -1752,13 +1948,32 @@ toggletag(const Arg *arg)
 void
 toggleview(const Arg *arg)
 {
-	unsigned int newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
+  uint64_t arg_tag = arg->ui & TAGMASK;
+  uint64_t newtagset = selmon->tagset[selmon->seltags] ^ arg_tag;
+  uint8_t is_added = newtagset > selmon->tagset[selmon->seltags];
 
-	if (newtagset) {
-		selmon->tagset[selmon->seltags] = newtagset;
-		focus(NULL);
-		arrange(selmon);
+  if (newtagset) {
+    selmon->tagset[selmon->seltags] = newtagset;
+
+    if (is_added) {
+      Client *c = selmon->stack, *newfocus = NULL, *oldfocus = selmon->sel;
+      while (c) {
+	if (c->tags & arg_tag) {
+	  selmon->sel = c;
+	  XRaiseWindow(dpy, c->win);
+	  if (!newfocus) newfocus = c;
 	}
+	c = c->snext;
+      }
+      if (newfocus) {
+	unfocus(oldfocus, 0);
+	focus(newfocus);
+      }
+    } else {
+      focus(NULL);
+    }
+    arrange(selmon);
+  }
 }
 
 void
