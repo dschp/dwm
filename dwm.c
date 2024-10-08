@@ -1956,14 +1956,13 @@ toggleview(const Arg *arg)
     selmon->tagset[selmon->seltags] = newtagset;
 
     if (is_added) {
-      Client *c = selmon->stack, *newfocus = NULL, *oldfocus = selmon->sel;
-      while (c) {
+      Client *newfocus = NULL, *oldfocus = selmon->sel;
+      for (Client *c = selmon->stack; c; c = c->snext) {
 	if (c->tags & arg_tag) {
 	  selmon->sel = c;
 	  XRaiseWindow(dpy, c->win);
 	  if (!newfocus) newfocus = c;
 	}
-	c = c->snext;
       }
       if (newfocus) {
 	unfocus(oldfocus, 0);
