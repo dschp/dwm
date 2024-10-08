@@ -1,8 +1,13 @@
 /* See LICENSE file for copyright and license details. */
 
+#define ENV_STATUS_DIR   "STATUS_DIR"
+#define STATUS_MAX_FILE  10
+#define STATUS_SEP_LEN   sizeof(status_separator) - 1
+static const char status_separator[] = " / ";
+
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
-static const unsigned int snap      = 32;       /* snap pixel */
+static const unsigned int snap      = 16;       /* snap pixel */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 0;        /* 0 means bottom bar */
 static const char *fonts[]          = { "sans-serif:size=7" };
@@ -48,8 +53,6 @@ static const Rule rules[] = {
 };
 
 /* layout(s) */
-static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
-static const int nmaster     = 1;    /* number of clients in master area */
 static const int resizehints = 1;    /* 1 means respect size hints in tiled resizals */
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 
@@ -58,19 +61,11 @@ static const Layout layouts[] = {
   { "<>",       NULL },
 };
 
-void
-toggleview_focusstack(const Arg *arg) {
-  toggleview(arg);
-  Arg a = {.i = +1};
-  focusstack(&a);
-}
-
 /* key definitions */
 #define AltMask Mod1Mask
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG)						\
   { MODKEY,                       KEY, toggleview, {.ui = 1ULL << TAG} }, \
-  { MODKEY|ControlMask,           KEY, view,       {.ui = 1ULL << TAG} }, \
   { MODKEY|ShiftMask,             KEY, tag,        {.ui = 1ULL << TAG} },
 
 /* commands */
@@ -92,8 +87,6 @@ static Key keys[] = {
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
-  { MODKEY,                       XK_Tab,          view,            {0} },
-  { MODKEY|ControlMask,           XK_Tab,          viewlasttoggled, {0} },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
   { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
@@ -112,8 +105,7 @@ static Key keys[] = {
   { MODKEY|ControlMask,           XK_k,            moveclient_h,    {.f = -0.075 } },
   { MODKEY|ControlMask,           XK_l,            moveclient_w,    {.f = +0.075 } },
   { MODKEY,                       XK_space,        maximize,        {0} },
-  { MODKEY|AltMask,               XK_space,        centerwindow,    {0} },
-  TAGKEYS(                        XK_grave,                         0)
+  { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
   TAGKEYS(                        XK_1,                             1)
   TAGKEYS(                        XK_2,                             2)
   TAGKEYS(                        XK_3,                             3)
@@ -164,5 +156,4 @@ static Button buttons[] = {
   /* click                  event mask      button          function        argument */
   { ClkClientWin,           MODKEY,         Button1,        movemouse,      {0} },
   { ClkClientWin,           MODKEY,         Button3,        resizemouse,    {0} },
-  { ClkClientWin|ShiftMask, MODKEY,         Button3,        killclient,     {0} },
 };
