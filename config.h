@@ -68,11 +68,10 @@ toggleview_focusstack(const Arg *arg) {
 /* key definitions */
 #define AltMask Mod1Mask
 #define MODKEY Mod4Mask
-#define TAGKEYS(KEY,TAG) \
+#define TAGKEYS(KEY,TAG)						\
   { MODKEY,                       KEY, toggleview, {.ui = 1ULL << TAG} }, \
   { MODKEY|ControlMask,           KEY, view,       {.ui = 1ULL << TAG} }, \
-  { MODKEY|ShiftMask,             KEY, tag,        {.ui = 1ULL << TAG} }, \
-  { MODKEY|ControlMask|ShiftMask, KEY, toggletag,  {.ui = 1ULL << TAG} },
+  { MODKEY|ShiftMask,             KEY, tag,        {.ui = 1ULL << TAG} },
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -94,6 +93,7 @@ static Key keys[] = {
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
   { MODKEY,                       XK_Tab,          view,            {0} },
+  { MODKEY|ControlMask,           XK_Tab,          viewlasttoggled, {0} },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
   { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },

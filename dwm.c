@@ -113,24 +113,25 @@ typedef struct {
 } Layout;
 
 struct Monitor {
-	char ltsymbol[16];
-	float mfact;
-	int nmaster;
-	int num;
-	int by;               /* bar geometry */
-	int mx, my, mw, mh;   /* screen size */
-	int wx, wy, ww, wh;   /* window area  */
-	uint8_t seltags;
-	uint8_t sellt;
-	uint64_t tagset[2];
-	int showbar;
-	int topbar;
-	Client *clients;
-	Client *sel;
-	Client *stack;
-	Monitor *next;
-	Window barwin;
-	const Layout *lt[2];
+  char ltsymbol[16];
+  float mfact;
+  int nmaster;
+  int num;
+  int by;               /* bar geometry */
+  int mx, my, mw, mh;   /* screen size */
+  int wx, wy, ww, wh;   /* window area  */
+  uint8_t seltags;
+  uint64_t tagset[2];
+  uint64_t last_toggled_view;
+  int showbar;
+  int topbar;
+  Client *clients;
+  Client *sel;
+  Client *stack;
+  Monitor *next;
+  Window barwin;
+  uint8_t sellt;
+  const Layout *lt[2];
 };
 
 typedef struct {
@@ -221,7 +222,7 @@ static void tag(const Arg *arg);
 //static void tile(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
-static void toggletag(const Arg *arg);
+//static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
@@ -237,6 +238,7 @@ static void updatetitle(Client *c);
 static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
 static void view(const Arg *arg);
+static void viewlasttoggled(const Arg *arg);
 static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
@@ -318,7 +320,9 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : c->mon->tagset[c->mon->seltags];
+	if (!c->tags) {
+		c->tags = c->mon->last_toggled_view;
+	}
 }
 
 int
@@ -659,6 +663,7 @@ createmon(void)
 
 	m = ecalloc(1, sizeof(Monitor));
 	m->tagset[0] = m->tagset[1] = 1;
+	m->last_toggled_view = 1;
 	m->mfact = mfact;
 	m->nmaster = nmaster;
 	m->showbar = showbar;
@@ -1959,43 +1964,61 @@ void
 toggleview(const Arg *arg)
 {
   uint64_t arg_tag = arg->ui & TAGMASK;
+  if (!arg_tag) return;
+
   uint64_t newtagset = selmon->tagset[selmon->seltags] ^ arg_tag;
+  if (!newtagset) return;
+
   uint8_t is_added = newtagset > selmon->tagset[selmon->seltags];
+  selmon->tagset[selmon->seltags] = newtagset;
 
-  if (newtagset) {
-    selmon->tagset[selmon->seltags] = newtagset;
+  if (is_added) {
+    selmon->last_toggled_view = arg_tag;
 
-    if (is_added) {
-      Client *ns_start = NULL, *ns_end = NULL;
-      for (Client *c = selmon->stack, *c2 = NULL; c;) {
-	c2 = c->snext;
-	if (!c2) {
-	  if (ns_start) {
-	    ns_end->snext = selmon->stack;
-	    selmon->stack = ns_start;
-	    focus(ns_start);
-	  }
-	  break;
+    Client *ns_start = NULL, *ns_end = NULL;
+    for (Client *c = selmon->stack, *c2 = NULL; c;) {
+      c2 = c->snext;
+      if (!c2) {
+	if (ns_start) {
+	  ns_end->snext = selmon->stack;
+	  selmon->stack = ns_start;
+	  focus(ns_start);
 	}
+	break;
+      }
 
-	if (c2->tags & arg_tag) {
-	  c->snext = c2->snext;
-	  if (!ns_start) {
-	    ns_start = ns_end = c2;
-	  } else {
-	    ns_end->snext = c2;
-	    ns_end = c2;
-	  }
-	  XRaiseWindow(dpy, c2->win);
+      if (c2->tags & arg_tag) {
+	c->snext = c2->snext;
+	if (!ns_start) {
+	  ns_start = ns_end = c2;
 	} else {
-	  c = c2;
+	  ns_end->snext = c2;
+	  ns_end = c2;
+	}
+	XRaiseWindow(dpy, c2->win);
+      } else {
+	c = c2;
+      }
+    }
+  } else {
+    if (selmon->last_toggled_view == arg_tag) {
+      if (selmon->sel && ISVISIBLE(selmon->sel)) {
+	selmon->last_toggled_view = selmon->sel->tags;
+      } else {
+	uint64_t tv = selmon->last_toggled_view = 1;
+	for (int i = 0; i < LENGTH(tags); i++) {
+	  if (tv & newtagset) {
+	    selmon->last_toggled_view = tv;
+	    break;
+	  }
+	  tv <<= 1;
 	}
       }
-    } else {
-      focus(NULL);
     }
-    arrange(selmon);
+    focus(NULL);
   }
+  arrange(selmon);
+
 }
 
 void
@@ -2289,13 +2312,24 @@ updatewmhints(Client *c)
 void
 view(const Arg *arg)
 {
-	if ((arg->ui & TAGMASK) == selmon->tagset[selmon->seltags])
-		return;
-	selmon->seltags ^= 1; /* toggle sel tagset */
-	if (arg->ui & TAGMASK)
-		selmon->tagset[selmon->seltags] = arg->ui & TAGMASK;
-	focus(NULL);
-	arrange(selmon);
+  uint64_t arg_tag = arg->ui & TAGMASK;
+  if (arg_tag == selmon->tagset[selmon->seltags]) return;
+
+  selmon->seltags ^= 1; /* toggle sel tagset */
+  if (arg_tag) selmon->tagset[selmon->seltags] = arg_tag;
+  selmon->last_toggled_view = selmon->tagset[selmon->seltags];
+
+  focus(NULL);
+  arrange(selmon);
+}
+
+void
+viewlasttoggled(const Arg *arg)
+{
+  if (!selmon->last_toggled_view) return;
+
+  Arg a = {.ui = selmon->last_toggled_view};
+  view(&a);
 }
 
 Client *
