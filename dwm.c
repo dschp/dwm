@@ -1954,17 +1954,30 @@ toggleview(const Arg *arg)
     selmon->tagset[selmon->seltags] = newtagset;
 
     if (is_added) {
-      Client *newfocus = NULL, *oldfocus = selmon->sel;
-      for (Client *c = selmon->stack; c; c = c->snext) {
-	if (c->tags & arg_tag) {
-	  selmon->sel = c;
-	  XRaiseWindow(dpy, c->win);
-	  if (!newfocus) newfocus = c;
+      Client *ns_start = NULL, *ns_end = NULL;
+      for (Client *c = selmon->stack, *c2 = NULL; c;) {
+	c2 = c->snext;
+	if (!c2) {
+	  if (ns_start) {
+	    ns_end->snext = selmon->stack;
+	    selmon->stack = ns_start;
+	    focus(ns_start);
+	  }
+	  break;
 	}
-      }
-      if (newfocus) {
-	unfocus(oldfocus, 0);
-	focus(newfocus);
+
+	if (c2->tags & arg_tag) {
+	  c->snext = c2->snext;
+	  if (!ns_start) {
+	    ns_start = ns_end = c2;
+	  } else {
+	    ns_end->snext = c2;
+	    ns_end = c2;
+	  }
+	  XRaiseWindow(dpy, c2->win);
+	} else {
+	  c = c2;
+	}
       }
     } else {
       focus(NULL);
