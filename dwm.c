@@ -1123,12 +1123,10 @@ manage(Window w, XWindowAttributes *wa)
 		applyrules(c);
 	}
 
-	if (c->x + WIDTH(c) > c->mon->wx + c->mon->ww)
-		c->x = c->mon->wx + c->mon->ww - WIDTH(c);
-	if (c->y + HEIGHT(c) > c->mon->wy + c->mon->wh)
-		c->y = c->mon->wy + c->mon->wh - HEIGHT(c);
-	c->x = MAX(c->x, c->mon->wx);
-	c->y = MAX(c->y, c->mon->wy);
+	c->w = MIN(c->w, c->mon->ww);
+	c->h = MIN(c->h, c->mon->wh);
+	c->x = (c->mon->ww - c->w) / 2;
+	c->y = (c->mon->wh - c->h) / 2;
 	c->bw = borderpx;
 
 	wc.border_width = c->bw;
