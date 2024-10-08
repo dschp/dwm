@@ -755,13 +755,23 @@ drawbar(Monitor *m)
     }
   }
 
+  size_t cnt_all = 0, cnt_vis = 0;
   for (c = m->clients; c; c = c->next) {
+    cnt_all++;
+    if (ISVISIBLE(c)) cnt_vis++;
     occ |= c->tags;
-    if (c->isurgent)
-      urg |= c->tags;
+    if (c->isurgent) urg |= c->tags;
   }
 
   x = 0;
+
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%ld / %ld", cnt_vis, cnt_all);
+  w = TEXTW(buf);
+  drw_setscheme(drw, scheme[SchemeNorm]);
+  drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
+  x += w;
+
   for (i = 0; i < LENGTH(tags); i++) {
     uint8_t selected = m->tagset[m->seltags] >> i & 1;
     uint8_t has_client = occ & 1;
@@ -781,17 +791,25 @@ drawbar(Monitor *m)
     urg >>= 1;
   }
 
-  if ((w = m->ww - tw - x) > bh) {
-    if (m->sel) {
-      drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
-      drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
-      if (m->sel->isfloating)
-        drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
-    } else {
+  w = m->ww - tw - x;
+  if (w > bh) {
+    if (cnt_vis == 0) {
       drw_setscheme(drw, scheme[SchemeNorm]);
       drw_rect(drw, x, 0, w, bh, 1, 1);
+    } else {
+      w = w / cnt_vis;
+      for (c = m->clients; c; c = c->next) {
+	if (!ISVISIBLE(c)) continue;
+
+	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
+	drw_text(drw, x, 0, w, bh, lrpad / 2, c->name, 0);
+	if (c->isfloating)
+	  drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, 0);
+	x += w;
+      }
     }
   }
+
   drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
 
