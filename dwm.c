@@ -186,6 +186,11 @@ static void maprequest(XEvent *e);
 static void maximize(const Arg *arg);
 //static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
+void moveclient(Client *, int x, int y, int w, int c);
+static void moveclient_x(const Arg *arg);
+static void moveclient_y(const Arg *arg);
+static void moveclient_w(const Arg *arg);
+static void moveclient_h(const Arg *arg);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
 static void pop(Client *c);
@@ -193,10 +198,6 @@ static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
-static void resizebykey_x(const Arg *arg);
-static void resizebykey_y(const Arg *arg);
-static void resizebykey_w(const Arg *arg);
-static void resizebykey_h(const Arg *arg);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
 static void restack(Monitor *m);
@@ -474,7 +475,7 @@ centerwindow(const Arg *arg)
     int x = (selmon->ww - c->w) / 2;
     int y = (selmon->wh - c->h) / 2;
 
-    resize(c, x, y, c->w, c->h, 0);
+    moveclient(c, x, y, c->w, c->h);
   }
 }
 
@@ -1236,6 +1237,83 @@ motionnotify(XEvent *e)
 }
 
 void
+moveclient(Client *c, int x, int y, int w, int h)
+{
+    resize(c, x, y, w, h, 0);
+    XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, w / 2, h / 2);
+}
+
+void
+moveclient_x(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x;
+    if (arg->f < 0.0) {
+      x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
+    } else {
+      x = MIN(c->x + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - c->w - 2 * c->bw);
+    }
+
+    moveclient(c, x, c->y, c->w, c->h);
+  }
+}
+
+void
+moveclient_y(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int y;
+    if (arg->f < 0.0) {
+      y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
+    } else {
+      y = MIN(c->y + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - c->h - 2 * c->bw);
+    }
+
+    moveclient(c, c->x, y, c->w, c->h);
+  }
+}
+
+void
+moveclient_w(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int x = c->x;
+    int w;
+    if (arg->f < 0.0) {
+      w = MAX(c->w + ((int) selmon->ww * MAX(arg->f, -1.0)), 100);
+    } else {
+      w = MIN(c->w + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - 2 * c->bw);
+      int diff = (x + w) - (selmon->ww - 2 * c->bw);
+      if (diff > 0) x -= diff;
+    }
+
+    moveclient(c, x, c->y, w, c->h);
+  }
+}
+
+void
+moveclient_h(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (c) {
+    int y = c->y;
+    int h;
+    if (arg->f < 0.0) {
+      h = MAX(c->h + ((int) selmon->wh * MAX(arg->f, -1.0)), 100);
+    } else {
+      h = MIN(c->h + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - 2 * c->bw);
+      int diff = (y + h) - (selmon->wh - 2 * c->bw);
+      if (diff > 0) y -= diff;
+    }
+
+    moveclient(c, c->x, y, c->w, h);
+  }
+}
+
+void
 movemouse(const Arg *arg)
 {
 	int x, y, ocx, ocy, nx, ny;
@@ -1373,72 +1451,6 @@ resize(Client *c, int x, int y, int w, int h, int interact)
 {
 	if (applysizehints(c, &x, &y, &w, &h, interact))
 		resizeclient(c, x, y, w, h);
-}
-
-void
-resizebykey_x(const Arg *arg)
-{
-  Client *c = selmon->sel;
-  if (c) {
-    int x;
-    if (arg->f < 0.0) {
-      x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
-    } else {
-      x = MIN(c->x + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - c->w - 2 * c->bw);
-    }
-    resize(c, x, c->y, c->w, c->h, 0);
-  }
-}
-
-void
-resizebykey_y(const Arg *arg)
-{
-  Client *c = selmon->sel;
-  if (c) {
-    int y;
-    if (arg->f < 0.0) {
-      y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
-    } else {
-      y = MIN(c->y + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - c->h - 2 * c->bw);
-    }
-    resize(c, c->x, y, c->w, c->h, 0);
-  }
-}
-
-void
-resizebykey_w(const Arg *arg)
-{
-  Client *c = selmon->sel;
-  if (c) {
-    int x = c->x;
-    int w;
-    if (arg->f < 0.0) {
-      w = MAX(c->w + ((int) selmon->ww * MAX(arg->f, -1.0)), 100);
-    } else {
-      w = MIN(c->w + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - 2 * c->bw);
-      int diff = (x + w) - (selmon->ww - 2 * c->bw);
-      if (diff > 0) x -= diff;
-    }
-    resize(c, x, c->y, w, c->h, 0);
-  }
-}
-
-void
-resizebykey_h(const Arg *arg)
-{
-  Client *c = selmon->sel;
-  if (c) {
-    int y = c->y;
-    int h;
-    if (arg->f < 0.0) {
-      h = MAX(c->h + ((int) selmon->wh * MAX(arg->f, -1.0)), 100);
-    } else {
-      h = MIN(c->h + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - 2 * c->bw);
-      int diff = (y + h) - (selmon->wh - 2 * c->bw);
-      if (diff > 0) y -= diff;
-    }
-    resize(c, c->x, y, c->w, h, 0);
-  }
 }
 
 void
@@ -1816,7 +1828,7 @@ snapandcenter_x(const Arg *arg)
     }
     int y = (selmon->wh - c->h) / 2;
 
-    resize(c, x, y, c->w, c->h, 0);
+    moveclient(c, x, y, c->w, c->h);
   }
 }
 
@@ -1833,7 +1845,7 @@ snapandcenter_y(const Arg *arg)
       y = selmon->wh - c->h - 2 * c->bw;
     }
 
-    resize(c, x, y, c->w, c->h, 0);
+    moveclient(c, x, y, c->w, c->h);
   }
 }
 

@@ -56,8 +56,6 @@ static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen win
 static const Layout layouts[] = {
   /* symbol     arrange function */
   { "<>",       NULL },
-  /* { "[]=",      tile }, */
-  /* { "[M]",      monocle }, */
 };
 
 void
@@ -68,6 +66,7 @@ toggleview_focusstack(const Arg *arg) {
 }
 
 /* key definitions */
+#define AltMask Mod1Mask
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
   { MODKEY,                       KEY, toggleview, {.ui = 1ULL << TAG} }, \
@@ -90,30 +89,30 @@ static const char *termcmd[]  = { "st", NULL };
 
 static Key keys[] = {
   /* modifier                     key              function         argument */
-  { MODKEY|ShiftMask|ControlMask, XK_Escape,       quit,            {0} },
-  { MODKEY|ShiftMask,             XK_Delete,       killclient,      {0} },
+  { MODKEY|AltMask|ShiftMask,     XK_Escape,       quit,            {0} },
+  { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
   { MODKEY,                       XK_Tab,          view,            {0} },
-  { MODKEY|ShiftMask,             XK_Tab,          togglebar,       {0} },
-  { MODKEY,                       XK_h,            resizebykey_w,   {.f = +1.0 } },
+  { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
+  { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
   { MODKEY,                       XK_k,            focusstack,      {.i = -1 } },
-  { MODKEY,                       XK_l,            resizebykey_h,   {.f = +1.0 } },
-  { MODKEY|ShiftMask,             XK_h,            resizebykey_x,   {.f = -0.075 } },
-  { MODKEY|ShiftMask,             XK_j,            resizebykey_y,   {.f = +0.075 } },
-  { MODKEY|ShiftMask,             XK_k,            resizebykey_y,   {.f = -0.075 } },
-  { MODKEY|ShiftMask,             XK_l,            resizebykey_x,   {.f = +0.075 } },
-  { MODKEY|ShiftMask|ControlMask, XK_h,            resizebykey_w,   {.f = -0.075 } },
-  { MODKEY|ShiftMask|ControlMask, XK_j,            resizebykey_h,   {.f = +0.075 } },
-  { MODKEY|ShiftMask|ControlMask, XK_k,            resizebykey_h,   {.f = -0.075 } },
-  { MODKEY|ShiftMask|ControlMask, XK_l,            resizebykey_w,   {.f = +0.075 } },
-  { MODKEY|ControlMask,           XK_h,            snapandcenter_x, {.i = -1} },
-  { MODKEY|ControlMask,           XK_j,            snapandcenter_y, {.i = +1} },
-  { MODKEY|ControlMask,           XK_k,            snapandcenter_y, {.i = -1} },
-  { MODKEY|ControlMask,           XK_l,            snapandcenter_x, {.i = +1} },
+  { MODKEY|AltMask|ShiftMask,     XK_l,            moveclient_h,    {.f = +1.0 } },
+  { MODKEY|AltMask,               XK_h,            snapandcenter_x, {.i = -1} },
+  { MODKEY|AltMask,               XK_j,            snapandcenter_y, {.i = +1} },
+  { MODKEY|AltMask,               XK_k,            snapandcenter_y, {.i = -1} },
+  { MODKEY|AltMask,               XK_l,            snapandcenter_x, {.i = +1} },
+  { MODKEY|ShiftMask,             XK_h,            moveclient_x,    {.f = -0.075 } },
+  { MODKEY|ShiftMask,             XK_j,            moveclient_y,    {.f = +0.075 } },
+  { MODKEY|ShiftMask,             XK_k,            moveclient_y,    {.f = -0.075 } },
+  { MODKEY|ShiftMask,             XK_l,            moveclient_x,    {.f = +0.075 } },
+  { MODKEY|ControlMask,           XK_h,            moveclient_w,    {.f = -0.075 } },
+  { MODKEY|ControlMask,           XK_j,            moveclient_h,    {.f = +0.075 } },
+  { MODKEY|ControlMask,           XK_k,            moveclient_h,    {.f = -0.075 } },
+  { MODKEY|ControlMask,           XK_l,            moveclient_w,    {.f = +0.075 } },
   { MODKEY,                       XK_space,        maximize,        {0} },
-  { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
+  { MODKEY|AltMask,               XK_space,        centerwindow,    {0} },
   TAGKEYS(                        XK_grave,                         0)
   TAGKEYS(                        XK_1,                             1)
   TAGKEYS(                        XK_2,                             2)
