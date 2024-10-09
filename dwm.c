@@ -151,6 +151,7 @@ static void arrange(Monitor *m);
 static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
+void bringupclients(uint64_t tags);
 static void buttonpress(XEvent *e);
 static void centerwindow(const Arg *arg);
 static void checkotherwm(void);
@@ -216,6 +217,7 @@ static void tagandview(const Arg *arg);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggleview(const Arg *arg);
+void validate_spawn_tag_idx(void);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
@@ -420,6 +422,38 @@ attachstack(Client *c)
 {
 	c->snext = c->mon->stack;
 	c->mon->stack = c;
+}
+
+void
+bringupclients(uint64_t tags)
+{
+  if (!tags) return;
+
+  Client *ns_start = NULL, *ns_end = NULL;
+  for (Client *c = selmon->stack, *c2 = NULL; c;) {
+    c2 = c->snext;
+    if (!c2) {
+      if (ns_start) {
+	ns_end->snext = selmon->stack;
+	selmon->stack = ns_start;
+	focus(ns_start);
+      }
+      break;
+    }
+
+    if (1ULL << c2->tag_idx & tags) {
+      c->snext = c2->snext;
+      if (!ns_start) {
+	ns_start = ns_end = c2;
+      } else {
+	ns_end->snext = c2;
+	ns_end = c2;
+      }
+      XRaiseWindow(dpy, c2->win);
+    } else {
+      c = c2;
+    }
+  }
 }
 
 void
@@ -2007,44 +2041,20 @@ toggleview(const Arg *arg)
   uint64_t newtags = selmon->tags ^ arg_tag;
   if (!newtags) return;
 
-  uint8_t need_restack = newtags > selmon->tags;
   selmon->tags = newtags;
   selmon->last_toggled_tags = arg_tag;
+  uint64_t added = newtags & arg_tag;
 
-  if (arg->i >= 0 && need_restack) {
+  if (arg->i < 0) {
+    validate_spawn_tag_idx();
+    bringupclients(added);
+    if (!selmon->sel || !(1ULL << selmon->sel->tag_idx & newtags))
+      focus(NULL);
+  } else if (added) {
     selmon->spawn_tag_idx = arg->i;
-
-    Client *ns_start = NULL, *ns_end = NULL;
-    for (Client *c = selmon->stack, *c2 = NULL; c;) {
-      c2 = c->snext;
-      if (!c2) {
-	if (ns_start) {
-	  ns_end->snext = selmon->stack;
-	  selmon->stack = ns_start;
-	  focus(ns_start);
-	}
-	break;
-      }
-
-      if (1ULL << c2->tag_idx & arg_tag) {
-	c->snext = c2->snext;
-	if (!ns_start) {
-	  ns_start = ns_end = c2;
-	} else {
-	  ns_end->snext = c2;
-	  ns_end = c2;
-	}
-	XRaiseWindow(dpy, c2->win);
-      } else {
-	c = c2;
-      }
-    }
+    bringupclients(added);
   } else {
-    if (!(1ULL << selmon->spawn_tag_idx & selmon->tags)) {
-      size_t i = 0;
-      for (uint64_t t = 1; !(t & selmon->tags); t <<= 1, i++);
-      selmon->spawn_tag_idx = i;
-    }
+    validate_spawn_tag_idx();
     focus(NULL);
   }
 
@@ -2337,6 +2347,16 @@ updatewmhints(Client *c)
 }
 
 void
+validate_spawn_tag_idx(void)
+{
+  if (!(1ULL << selmon->spawn_tag_idx & selmon->tags)) {
+    size_t i = 0;
+    for (uint64_t tag = 1; !(tag & selmon->tags); tag <<=1, i++);
+    selmon->spawn_tag_idx = i;
+  }
+}
+
+void
 view(const Arg *arg)
 {
   size_t tag_idx = (arg->i < 0) ? selmon->spawn_tag_idx : arg->i;
@@ -2361,15 +2381,12 @@ viewclients(const Arg *arg)
     newtags |= 1ULL << c->tag_idx;
   }
   if (!newtags) return;
+  if (selmon->tags == newtags) return;
+
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
-  if (!(newtags & 1ULL << selmon->spawn_tag_idx)) {
-    size_t i = 0;
-    for (uint64_t tag = 1; !(tag & newtags); tag <<=1, i++);
-    selmon->spawn_tag_idx = i;
-  }
-
-  focus(NULL);
+  validate_spawn_tag_idx();
+  bringupclients(newtags & selmon->last_toggled_tags);
   arrange(selmon);
 }
 
