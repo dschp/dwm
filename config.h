@@ -1,5 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
+#define BAR_CLIENT_MAX_WIDTH 250
 #define ENV_STATUS_DIR   "STATUS_DIR"
 #define STATUS_MAX_FILE  10
 #define STATUS_SEP_LEN   sizeof(status_separator) - 1
@@ -29,6 +30,7 @@ static const char *colors[][3]      = {
   /*                 fg          bg        border   */
   [SchemeNorm]   = { col_fg1,    col_bg2,  col_bdr2 },
   [SchemeSel]    = { col_cyan1,  col_bg1,  col_bdr1 },
+  [SchemeSpawn]  = { col_green,  col_bg1,  col_bdr1 },
                    { col_yellow, col_bg2,  col_bdr2 },
                    { col_green,  col_bg2,  col_bdr2 },
                    { col_red,    col_bg2,  col_bdr2 },
@@ -48,7 +50,7 @@ static const Rule rules[] = {
    *	WM_CLASS(STRING) = instance, class
    *	WM_NAME(STRING) = title
    */
-  /* class      instance    title       tags mask     isfloating   monitor */
+  /* class      instance    title       tag index     isfloating   monitor */
   { "Gimp",     NULL,       NULL,       0,            1,           -1 },
 };
 
@@ -58,15 +60,17 @@ static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen win
 
 static const Layout layouts[] = {
   /* symbol     arrange function */
-  { "<>",       NULL },
+  { "",         NULL },
 };
 
 /* key definitions */
 #define AltMask Mod1Mask
 #define MODKEY Mod4Mask
-#define TAGKEYS(KEY,TAG)						\
-  { MODKEY,                       KEY, toggleview, {.ui = 1ULL << TAG} }, \
-  { MODKEY|ShiftMask,             KEY, tag,        {.ui = 1ULL << TAG} },
+#define TAGKEYS(KEY,TAG) \
+  { MODKEY,                       KEY, toggleview,     {.i  = TAG} }, \
+  { MODKEY|ControlMask,           KEY, view,           {.i  = TAG} }, \
+  { MODKEY|ShiftMask,             KEY, tag,            {.ui = TAG} }, \
+  { MODKEY|AltMask,               KEY, tagandview,     {.ui = TAG} },
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -87,6 +91,9 @@ static Key keys[] = {
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
+  { MODKEY,                       XK_Tab,          toggleview,      {.i = -1} },
+  { MODKEY|ControlMask,           XK_Tab,          view,            {.i = -1} },
+  { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
   { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
@@ -106,6 +113,7 @@ static Key keys[] = {
   { MODKEY|ControlMask,           XK_l,            moveclient_w,    {.f = +0.075 } },
   { MODKEY,                       XK_space,        maximize,        {0} },
   { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
+  TAGKEYS(                        XK_grave,                         0)
   TAGKEYS(                        XK_1,                             1)
   TAGKEYS(                        XK_2,                             2)
   TAGKEYS(                        XK_3,                             3)
