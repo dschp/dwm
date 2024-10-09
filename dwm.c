@@ -1617,31 +1617,44 @@ run(void)
   XEvent ev;
   int x11_fd;
   fd_set in_fds;
-  struct timeval tv;
+  struct timespec timer, last, now;
+  clock_gettime(CLOCK_MONOTONIC, &last);
 
   x11_fd = ConnectionNumber(dpy);
-
   /* main event loop */
   XSync(dpy, False);
   while (running) {
     FD_ZERO(&in_fds);
     FD_SET(x11_fd, &in_fds);
 
-    tv.tv_sec = 1;
-	tv.tv_usec = 0;
+    clock_gettime(CLOCK_MONOTONIC, &now);
 
-    int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
+    timer.tv_sec = now.tv_sec - last.tv_sec;
+    timer.tv_nsec = now.tv_nsec - last.tv_nsec;
+    if (timer.tv_nsec < 0) {
+      timer.tv_sec--;
+      timer.tv_nsec += 1.0e9;
+    }
+    if (timer.tv_sec > 0) {
+      drawbar(selmon);
+      clock_gettime(CLOCK_MONOTONIC, &last);
+
+      timer.tv_sec = 1;
+      timer.tv_nsec = 0;
+    } else {
+      timer.tv_nsec = 1.0e9 - timer.tv_nsec;
+    }
+
+    int num_ready_fds = pselect(x11_fd + 1, &in_fds, NULL, NULL, &timer, NULL);
     if (num_ready_fds < 0) {
       printf("An error occured!\n");
       break;
-    } else if (num_ready_fds == 0) {
-      drawbar(selmon);
-    }
-
-    while(XPending(dpy)) {
-      if (!XNextEvent(dpy, &ev))
-	if (handler[ev.type])
-	  handler[ev.type](&ev);
+    } else if (num_ready_fds > 0) {
+      while(XPending(dpy)) {
+	if (!XNextEvent(dpy, &ev))
+	  if (handler[ev.type])
+	    handler[ev.type](&ev);
+      }
     }
   }
 }
