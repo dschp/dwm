@@ -2000,7 +2000,6 @@ togglefloating(const Arg *arg)
 void
 toggleview(const Arg *arg)
 {
-  //size_t tag_idx = (arg->i < 0) ? selmon->spawn_tag_idx : arg->i;
   uint64_t arg_tag = (arg->i < 0) ?
     selmon->last_toggled_tags : 1ULL << arg->i & TAGMASK;
   if (!arg_tag) return;
