@@ -133,6 +133,7 @@ struct Monitor {
   Window barwin;
   uint8_t sellt;
   const Layout *lt[2];
+  int pointer_oldx, pointer_oldy;
 };
 
 typedef struct {
@@ -191,6 +192,7 @@ static void moveclient_y(const Arg *arg);
 static void moveclient_w(const Arg *arg);
 static void moveclient_h(const Arg *arg);
 static void movemouse(const Arg *arg);
+static void movepointer(const Arg *arg);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -1387,6 +1389,40 @@ movemouse(const Arg *arg)
 }
 
 void
+movepointer(const Arg *arg)
+{
+  Client *c = selmon->sel;
+
+  int x, y;
+  if (arg->i > 0) {
+    if (!c) return;
+
+    x = c->x + (c->w / 2);
+    y = c->y + (c->h / 2);
+  } else {
+    x = selmon->mw / 2;
+    y = selmon->mh - 1;
+  }
+
+  Window r, w;
+  int rx, ry, wx, wy;
+  unsigned int mask;
+
+  if (XQueryPointer(dpy, root, &r, &w, &rx, &ry, &wx, &wy, &mask)
+      == False)
+    return;
+
+  if (x == rx && y == ry) {
+    x = selmon->pointer_oldx;
+    y = selmon->pointer_oldy;
+  } else {
+    selmon->pointer_oldx = rx;
+    selmon->pointer_oldy = ry;
+  }
+  XWarpPointer(dpy, None, root, 0, 0, 0, 0, x, y);
+}
+
+void
 propertynotify(XEvent *e)
 {
 	Client *c;
@@ -1651,7 +1687,7 @@ run(void)
   XEvent ev;
   int x11_fd;
   fd_set in_fds;
-  struct timespec timer, last, now;
+  struct timespec timer, last;
   clock_gettime(CLOCK_MONOTONIC, &last);
 
   x11_fd = ConnectionNumber(dpy);
