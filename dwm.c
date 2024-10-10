@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <locale.h>
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -117,6 +118,8 @@ typedef struct {
 
 struct Monitor {
   char ltsymbol[16];
+  float mfact;
+  int nmaster;
   int num;
   int by;               /* bar geometry */
   int mx, my, mw, mh;   /* screen size */
@@ -179,12 +182,13 @@ static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
+static void grid(Monitor *m);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
-static void maximize(const Arg *arg);
+static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
 static void moveclient_x(const Arg *arg);
@@ -193,6 +197,8 @@ static void moveclient_w(const Arg *arg);
 static void moveclient_h(const Arg *arg);
 static void movemouse(const Arg *arg);
 static void movepointer(const Arg *arg);
+static Client *nexttiled(Client *c);
+static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -208,6 +214,8 @@ static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
+static void setlayout(const Arg *arg);
+static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
@@ -216,6 +224,9 @@ static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagandview(const Arg *arg);
+static void tile(Monitor *m, int right);
+static void tileright(Monitor *m);
+static void tileleft(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggleview(const Arg *arg);
@@ -240,6 +251,7 @@ static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
 static int xerrorstart(Display *dpy, XErrorEvent *ee);
+static void zoomormaximize(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
@@ -491,7 +503,7 @@ void
 centerwindow(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int x = (selmon->ww - c->w) / 2;
     int y = (selmon->wh - c->h) / 2;
 
@@ -679,6 +691,8 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	m->tags = m->last_toggled_tags = 1;
 	m->spawn_tag_idx = 0;
+	m->mfact = mfact;
+	m->nmaster = nmaster;
 	m->showbar = showbar;
 	m->topbar = topbar;
 	m->lt[0] = &layouts[0];
@@ -829,6 +843,10 @@ drawbar(Monitor *m)
     }
   }
 
+  w = TEXTW(m->ltsymbol);
+  drw_setscheme(drw, scheme[SchemeNorm]);
+  x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+
   w = m->ww - tw - x;
   if (w > bh) {
     if (cnt_vis == 0) {
@@ -856,6 +874,8 @@ drawbar(Monitor *m)
 	}
 
 	drw_text(drw, x, 0, tag_w, bh, lrpad / 2, buf, c == m->sel);
+	if (c->isfloating)
+	  drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, 0);
 	x += tag_w;
       }
 
@@ -1085,6 +1105,47 @@ grabkeys(void)
 	}
 }
 
+void
+grid(Monitor *m) {
+  size_t n;
+  Client *c;
+
+  for(n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  const size_t cols = ceil(sqrt(n));
+  const size_t cw = m->ww / cols;
+  const size_t q = n / cols;
+  const size_t r = n % cols;
+
+  const size_t ex = cols - r;
+  size_t col_i = 0, row_i = 0;
+  size_t cel_cnt = q, ch = m->wh / q;
+  for(c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
+    if (row_i == cel_cnt) {
+      row_i = 0;
+      col_i++;
+      if (col_i >= ex) {
+	cel_cnt = q + 1;
+	ch = m->wh / cel_cnt;
+      }
+    }
+
+    size_t cx = col_i * cw;
+    size_t cy = row_i * ch;
+
+    resize(c, cx, cy, cw - 2 * c->bw, ch - 2 * c->bw, 0);
+    row_i++;
+  }
+}
+
+void
+incnmaster(const Arg *arg)
+{
+	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
+	arrange(selmon);
+}
+
 #ifdef XINERAMA
 static int
 isuniquegeom(XineramaScreenInfo *unique, size_t n, XineramaScreenInfo *info)
@@ -1154,10 +1215,12 @@ manage(Window w, XWindowAttributes *wa)
 		applyrules(c);
 	}
 
-	c->w = MIN(c->w, c->mon->ww);
-	c->h = MIN(c->h, c->mon->wh);
-	c->x = (c->mon->ww - c->w) / 2;
-	c->y = (c->mon->wh - c->h) / 2;
+	if (c->x + WIDTH(c) > c->mon->wx + c->mon->ww)
+		c->x = c->mon->wx + c->mon->ww - WIDTH(c);
+	if (c->y + HEIGHT(c) > c->mon->wy + c->mon->wh)
+		c->y = c->mon->wy + c->mon->wh - HEIGHT(c);
+	c->x = MAX(c->x, c->mon->wx);
+	c->y = MAX(c->y, c->mon->wy);
 	c->bw = borderpx;
 
 	wc.border_width = c->bw;
@@ -1210,28 +1273,10 @@ maprequest(XEvent *e)
 }
 
 void
-maximize(const Arg *arg)
+monocle(Monitor *m)
 {
-  Client *c = selmon->sel;
-  if (c) {
-    switch (c->ismaximized) {
-    case 1:
-      resize(c, selmon->wx, selmon->wy, selmon->mw - 2 * c->bw, selmon->mh - 2 * c->bw, 0);
-      c->ismaximized = 2;
-      break;
-    case 2:
-      resize(c, c->origx, c->origy, c->origw, c->origh, 0);
-      c->ismaximized = 0;
-      break;
-    default:
-      c->origx = c->x;
-      c->origy = c->y;
-      c->origw = c->w;
-      c->origh = c->h;
-      resize(c, selmon->wx, selmon->wy, selmon->ww - 2 * c->bw, selmon->wh - 2 * c->bw, 0);
-      c->ismaximized = 1;
-    }
-  }
+  for (Client *c = nexttiled(m->clients); c; c = nexttiled(c->next))
+    resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
 }
 
 void
@@ -1262,7 +1307,7 @@ void
 moveclient_x(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int x;
     if (arg->f < 0.0) {
       x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
@@ -1278,7 +1323,7 @@ void
 moveclient_y(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int y;
     if (arg->f < 0.0) {
       y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
@@ -1294,7 +1339,7 @@ void
 moveclient_w(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int x = c->x;
     int w;
     if (arg->f < 0.0) {
@@ -1313,7 +1358,7 @@ void
 moveclient_h(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int y = c->y;
     int h;
     if (arg->f < 0.0) {
@@ -1420,6 +1465,22 @@ movepointer(const Arg *arg)
     selmon->pointer_oldy = ry;
   }
   XWarpPointer(dpy, None, root, 0, 0, 0, 0, x, y);
+}
+
+Client *
+nexttiled(Client *c)
+{
+	for (; c && (c->isfloating || !ISVISIBLE(c)); c = c->next);
+	return c;
+}
+
+void
+pop(Client *c)
+{
+	detach(c);
+	attach(c);
+	focus(c);
+	arrange(c->mon);
 }
 
 void
@@ -1847,6 +1908,34 @@ setfullscreen(Client *c, int fullscreen)
 }
 
 void
+setlayout(const Arg *arg)
+{
+	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
+		selmon->sellt ^= 1;
+	if (arg && arg->v)
+		selmon->lt[selmon->sellt] = (Layout *)arg->v;
+	strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
+	if (selmon->sel)
+		arrange(selmon);
+	else
+		drawbar(selmon);
+}
+
+void
+setmfact(const Arg *arg)
+{
+	float f;
+
+	if (!arg || !selmon->lt[selmon->sellt]->arrange)
+		return;
+	f = arg->f < 1.0 ? arg->f + selmon->mfact : arg->f - 1.0;
+	if (f < 0.05 || f > 0.95)
+		return;
+	selmon->mfact = f;
+	arrange(selmon);
+}
+
+void
 setup(void)
 {
 	int i;
@@ -1961,7 +2050,7 @@ void
 snapandcenter_x(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int x;
     if (arg->i < 0) {
       x = selmon->wx;
@@ -1978,7 +2067,7 @@ void
 snapandcenter_y(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c) {
+  if (c && c->isfloating) {
     int x = (selmon->ww - c->w) / 2;
     int y;
     if (arg->i < 0) {
@@ -2042,6 +2131,51 @@ tagandview(const Arg *arg)
 
   focus(NULL);
   arrange(selmon);
+}
+
+void
+tile(Monitor *m, int right)
+{
+  size_t i, n, h, mw, my, ty;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  if (n > m->nmaster)
+    mw = m->nmaster ? m->ww * m->mfact : 0;
+  else
+    mw = m->ww;
+  for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+    if (i < m->nmaster) {
+      h = (m->wh - my) / (MIN(n, m->nmaster) - i);
+      if (right)
+	resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
+      else
+	resize(c, m->wx + m->ww - mw, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
+      if (my + HEIGHT(c) < m->wh)
+	my += HEIGHT(c);
+    } else {
+      h = (m->wh - ty) / (n - i);
+      if (right)
+	resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
+      else
+	resize(c, m->wx, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
+      if (ty + HEIGHT(c) < m->wh)
+	ty += HEIGHT(c);
+    }
+}
+
+void
+tileright(Monitor *m)
+{
+  tile(m, 1);
+}
+
+void
+tileleft(Monitor *m)
+{
+  tile(m, 0);
 }
 
 void
@@ -2490,6 +2624,40 @@ xerrorstart(Display *dpy, XErrorEvent *ee)
 {
 	die("dwm: another window manager is already running");
 	return -1;
+}
+
+void
+zoomormaximize(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (!c) return;
+
+  if (c->isfloating) {
+    switch (c->ismaximized) {
+    case 1:
+      resize(c, selmon->wx, selmon->wy, selmon->mw - 2 * c->bw, selmon->mh - 2 * c->bw, 0);
+      c->ismaximized = 2;
+      break;
+    case 2:
+      resize(c, c->origx, c->origy, c->origw, c->origh, 0);
+      c->ismaximized = 0;
+      break;
+    default:
+      c->origx = c->x;
+      c->origy = c->y;
+      c->origw = c->w;
+      c->origh = c->h;
+      resize(c, selmon->wx, selmon->wy, selmon->ww - 2 * c->bw, selmon->wh - 2 * c->bw, 0);
+      c->ismaximized = 1;
+    }
+    return;
+  }
+
+  if (!selmon->lt[selmon->sellt]->arrange)
+    return;
+  if (c == nexttiled(selmon->clients) && !(c = nexttiled(c->next)))
+    return;
+  pop(c);
 }
 
 int

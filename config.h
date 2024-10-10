@@ -51,16 +51,21 @@ static const Rule rules[] = {
    *	WM_NAME(STRING) = title
    */
   /* class      instance    title       tag index     isfloating   monitor */
-  { "Gimp",     NULL,       NULL,       0,            1,           -1 },
+  { "Gimp",     NULL,       NULL,       -1,            1,           -1 },
 };
 
 /* layout(s) */
+static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
+static const int nmaster     = 1;    /* number of clients in master area */
 static const int resizehints = 1;    /* 1 means respect size hints in tiled resizals */
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 
 static const Layout layouts[] = {
   /* symbol     arrange function */
-  { "",         NULL },
+  { "[]=",      tileright },
+  { "=[]",      tileleft },
+  { "[M]",      monocle },
+  { "#",        grid },
 };
 
 /* key definitions */
@@ -91,16 +96,18 @@ static Key keys[] = {
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
+  { MODKEY,                       XK_Left,         setlayout,       {.v = &layouts[0]} },
+  { MODKEY,                       XK_Right,        setlayout,       {.v = &layouts[1]} },
+  { MODKEY,                       XK_Up,           setlayout,       {.v = &layouts[2]} },
+  { MODKEY,                       XK_Down,         setlayout,       {.v = &layouts[3]} },
   { MODKEY,                       XK_Tab,          toggleview,      {.i = -1} },
   { MODKEY|ControlMask,           XK_Tab,          view,            {.i = -1} },
   { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
-  { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
-  { MODKEY,                       XK_h,            movepointer,     {.i = +1 } },
+  { MODKEY,                       XK_h,            setmfact,        {.f = -0.05 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
   { MODKEY,                       XK_k,            focusstack,      {.i = -1 } },
-  { MODKEY,                       XK_l,            movepointer,     {.i = -1 } },
-  { MODKEY|AltMask|ShiftMask,     XK_l,            moveclient_h,    {.f = +1.0 } },
+  { MODKEY,                       XK_l,            setmfact,        {.f = +0.05 } },
   { MODKEY|AltMask,               XK_h,            snapandcenter_x, {.i = -1} },
   { MODKEY|AltMask,               XK_j,            snapandcenter_y, {.i = +1} },
   { MODKEY|AltMask,               XK_k,            snapandcenter_y, {.i = -1} },
@@ -113,8 +120,13 @@ static Key keys[] = {
   { MODKEY|ControlMask,           XK_j,            moveclient_h,    {.f = +0.05 } },
   { MODKEY|ControlMask,           XK_k,            moveclient_h,    {.f = -0.05 } },
   { MODKEY|ControlMask,           XK_l,            moveclient_w,    {.f = +0.05 } },
-  { MODKEY,                       XK_space,        maximize,        {0} },
+  { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },
+  { MODKEY|AltMask|ShiftMask,     XK_j,            movepointer,     {.i = +1 } },
+  { MODKEY|AltMask|ShiftMask,     XK_k,            movepointer,     {.i = -1 } },
+  { MODKEY|AltMask|ShiftMask,     XK_l,            moveclient_h,    {.f = +1.0 } },
+  { MODKEY,                       XK_space,        zoomormaximize,  {0} },
   { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
+  { MODKEY|ShiftMask,             XK_space,        togglefloating,  {0} },
   TAGKEYS(                        XK_grave,                         0)
   TAGKEYS(                        XK_1,                             1)
   TAGKEYS(                        XK_2,                             2)
