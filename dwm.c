@@ -1661,10 +1661,10 @@ run(void)
     FD_ZERO(&in_fds);
     FD_SET(x11_fd, &in_fds);
 
-    clock_gettime(CLOCK_MONOTONIC, &now);
+    clock_gettime(CLOCK_MONOTONIC, &timer);
 
-    timer.tv_sec = now.tv_sec - last.tv_sec;
-    timer.tv_nsec = now.tv_nsec - last.tv_nsec;
+    timer.tv_sec -= last.tv_sec;
+    timer.tv_nsec -= last.tv_nsec;
     if (timer.tv_nsec < 0) {
       timer.tv_sec--;
       timer.tv_nsec += 1.0e9;
