@@ -870,7 +870,12 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
 
 	char buf[20 + sizeof(((Client){0}).name)];
-	snprintf(buf, sizeof(buf), "[%s] %s", tags[c->tag_idx], c->name);
+	const char *fmt = "[%s] %s";
+	const char *tname = tags[c->tag_idx];
+	if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
+	  fmt = "<%s> %s";
+	}
+	snprintf(buf, sizeof(buf), fmt, tname, c->name);
 
 	int tag_w = MIN(TEXTW(buf), BAR_CLIENT_MAX_WIDTH);
 	if (x + tag_w > limit) {
