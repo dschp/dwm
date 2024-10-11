@@ -447,7 +447,14 @@ bringupclients(uint64_t tags)
       if (ns_start) {
 	ns_end->snext = selmon->stack;
 	selmon->stack = ns_start;
-	focus(ns_start);
+
+	unfocus(selmon->sel, 0);
+
+	c = ns_start;
+	grabbuttons(c, 1);
+	XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
+	setfocus(c);
+	selmon->sel = c;
       }
       break;
     }
