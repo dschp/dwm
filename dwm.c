@@ -63,7 +63,7 @@
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNorm, SchemeSel, SchemeSpawn }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeSpawn, SchemeNmaster, SchemeMfactor }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
        NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
@@ -183,6 +183,10 @@ static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
 static void grid(Monitor *m);
+void gridtile(Monitor *m, int right);
+static void gridtileleft(Monitor *m);
+static void gridtileright(Monitor *m);
+Client* grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, size_t h);
 static void incnmaster(const Arg *arg);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
@@ -224,9 +228,9 @@ static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagandview(const Arg *arg);
-static void tile(Monitor *m, int right);
-static void tileright(Monitor *m);
+void tile(Monitor *m, int right);
 static void tileleft(Monitor *m);
+static void tileright(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggleview(const Arg *arg);
@@ -772,7 +776,7 @@ drawbar(Monitor *m)
     tw = TEXTW_(buf) + (status_lrpad * 2);
 
     drw_setscheme(drw, scheme[SchemeNorm]);
-    drw_text(drw, m->ww - tw, 0, lrpad / 2, bh, status_lrpad, "", 0);
+    drw_rect(drw, m->ww - tw, 0, tw, bh, 1, 1);
     x += status_lrpad;
 
     p1 = statustext;
@@ -790,7 +794,7 @@ drawbar(Monitor *m)
         p1++;
         if (*p1 == '\0') break;
 
-        size_t scheme_idx = (size_t) *p1 - 1;
+        size_t scheme_idx = MAX((size_t) *p1, 0x20) - 0x20;
         if (scheme_idx >= LENGTH(colors)) {
 	  scheme_idx = SchemeNorm;
         }
@@ -831,6 +835,26 @@ drawbar(Monitor *m)
     x += w;
   }
 
+  {
+    char buf[32];
+
+    snprintf(buf, sizeof(buf), "%d", m->nmaster);
+    w = TEXTW(buf);
+    drw_setscheme(drw, scheme[SchemeNmaster]);
+    drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
+    x += w;
+
+    snprintf(buf, sizeof(buf), "%.2f", m->mfact);
+    w = TEXTW_(buf) + lrpad / 2;
+    drw_setscheme(drw, scheme[SchemeMfactor]);
+    drw_text(drw, x, 0, w, bh, 0, buf, 0);
+    x += w;
+  }
+
+  w = TEXTW(m->ltsymbol);
+  drw_setscheme(drw, scheme[SchemeNorm]);
+  x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
     uint64_t selected = bit & m->tags;
     uint64_t has_client = bit & occ;
@@ -849,10 +873,6 @@ drawbar(Monitor *m)
 
     clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
  }
-
-  w = TEXTW(m->ltsymbol);
-  drw_setscheme(drw, scheme[SchemeNorm]);
-  x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
   w = m->ww - tw - x;
   if (w > bh) {
@@ -1125,30 +1145,98 @@ grid(Monitor *m) {
   for(n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  const size_t cols = ceil(sqrt(n));
-  const size_t cw = m->ww / cols;
-  const size_t q = n / cols;
-  const size_t r = n % cols;
+  grid_resize(m, nexttiled(m->clients), n, 0, 0, m->ww, m->wh);
+}
 
-  const size_t ex = cols - r;
+void
+gridtile(Monitor *m, int right)
+{
+  size_t n, mw, m_cnt;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  if (!m->nmaster) {
+    mw = m_cnt = 0;
+  } else if (n > m->nmaster) {
+    mw = m->ww * m->mfact;
+    m_cnt = m->nmaster;
+  } else {
+    mw = m->ww;
+    m_cnt = n;
+  }
+
+  c = nexttiled(m->clients);
+  if (m->nmaster) {
+    if (n > m->nmaster) {
+      mw = m->ww * m->mfact;
+      m_cnt = m->nmaster;
+    } else {
+      mw = m->ww;
+      m_cnt = n;
+    }
+    c = grid_resize(m, c, m_cnt, right ? 0 : m->ww - mw, 0, mw, m->wh);
+  } else {
+    mw = m_cnt = 0;
+  }
+
+  if (n > m_cnt) {
+    grid_resize(m, c, n - m_cnt, right ? mw : 0, 0, m->ww - mw, m->wh);
+  }
+}
+
+void
+gridtileleft(Monitor *m)
+{
+  gridtile(m, 0);
+}
+
+void
+gridtileright(Monitor *m)
+{
+  gridtile(m, 1);
+}
+
+Client*
+grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, size_t h)
+{
+  if (!c) return c;
+
+  const size_t g = ceil(sqrt(cnt));
+  const size_t q = cnt / g;
+  const size_t r = cnt % g;
+  const size_t e = g - r;
+
+  const size_t g_fixed = (w > h ? w : h) / g;
+
   size_t col_i = 0, row_i = 0;
-  size_t cel_cnt = q, ch = m->wh / q;
-  for(c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
+  size_t cel_cnt = q, g_inflatable = (w > h ? h : w) / q;
+  for (size_t i = 0; c && i < cnt; c = nexttiled(c->next), i++, row_i++) {
     if (row_i == cel_cnt) {
       row_i = 0;
       col_i++;
-      if (col_i >= ex) {
+      if (col_i >= e) {
 	cel_cnt = q + 1;
-	ch = m->wh / cel_cnt;
+	g_inflatable = (w > h ? h : w) / cel_cnt;
       }
     }
 
-    size_t cx = col_i * cw;
-    size_t cy = row_i * ch;
+    size_t cx, cy;
+    if (w > h) {
+      cx = col_i * g_fixed;
+      cy = row_i * g_inflatable;
+    } else {
+      cx = row_i * g_inflatable;
+      cy = col_i * g_fixed;
+    }
 
-    resize(c, cx, cy, cw - 2 * c->bw, ch - 2 * c->bw, 0);
-    row_i++;
+    resize(c, cx + x, cy + y,
+	   (w > h ? g_fixed : g_inflatable) - 2 * c->bw,
+	   (w > h ? g_inflatable : g_fixed) - 2 * c->bw, 0);
   }
+
+  return c;
 }
 
 void
@@ -2079,15 +2167,15 @@ tile(Monitor *m, int right)
 }
 
 void
-tileright(Monitor *m)
-{
-  tile(m, 1);
-}
-
-void
 tileleft(Monitor *m)
 {
   tile(m, 0);
+}
+
+void
+tileright(Monitor *m)
+{
+  tile(m, 1);
 }
 
 void

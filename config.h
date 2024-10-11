@@ -17,7 +17,8 @@ static const char col_fg1[]         = "#dddddd";
 static const char col_fg2[]         = "#eeeeee";
 static const char col_bg1[]         = "#000000";
 static const char col_bg2[]         = "#191919";
-static const char col_bdr1[]        = "#2652ac";
+static const char col_bg3[]         = "#2a2a2a";
+static const char col_bdr1[]        = "#0090ff";
 static const char col_bdr2[]        = "#242424";
 static const char col_cyan1[]       = "#00bbff";
 static const char col_cyan2[]       = "#0077cc";
@@ -25,16 +26,21 @@ static const char col_yellow[]      = "#ffff00";
 static const char col_green[]       = "#afff00";
 static const char col_red[]         = "#ff0087";
 static const char col_aqua[]        = "#00dddd";
+static const char col_nmaster[]     = "#4992ff";
+static const char col_mfactor[]     = "#f32f7c";
+
 
 static const char *colors[][3]      = {
-  /*                 fg          bg        border   */
-  [SchemeNorm]   = { col_fg1,    col_bg2,  col_bdr2 },
-  [SchemeSel]    = { col_cyan1,  col_bg1,  col_bdr1 },
-  [SchemeSpawn]  = { col_green,  col_bg1,  col_bdr1 },
-                   { col_yellow, col_bg2,  col_bdr2 },
-                   { col_green,  col_bg2,  col_bdr2 },
-                   { col_red,    col_bg2,  col_bdr2 },
-                   { col_aqua,   col_bg2,  col_bdr2 },
+  /*                 fg            bg         border   */
+  [SchemeNorm]    = { col_fg1,      col_bg2,   col_bdr2 }, /* 0 */
+  [SchemeSel]     = { col_cyan1,    col_bg1,   col_bdr1 }, /* 1 */
+  [SchemeSpawn]   = { col_green,    col_bg1,   col_bdr1 }, /* 2 */
+  [SchemeNmaster] = { col_nmaster,  col_bg3,   col_bdr2 }, /* 3 */
+  [SchemeMfactor] = { col_mfactor,  col_bg3,   col_bdr2 }, /* 4 */
+                    { col_yellow,   col_bg2,   col_bdr2 }, /* 5 */
+                    { col_green,    col_bg2,   col_bdr2 }, /* 6 */
+                    { col_red,      col_bg2,   col_bdr2 }, /* 7 */
+                    { col_aqua,     col_bg2,   col_bdr2 }, /* 8 */
 };
 
 /* tagging */
@@ -66,6 +72,8 @@ static const Layout layouts[] = {
   { "=[]",      tileleft },
   { "[M]",      monocle },
   { "#",        grid },
+  { "+#",       gridtileright },
+  { "#+",       gridtileleft },
 };
 
 /* key definitions */
@@ -100,6 +108,8 @@ static Key keys[] = {
   { MODKEY,                       XK_Right,        setlayout,       {.v = &layouts[1]} },
   { MODKEY,                       XK_Up,           setlayout,       {.v = &layouts[2]} },
   { MODKEY,                       XK_Down,         setlayout,       {.v = &layouts[3]} },
+  { MODKEY|ShiftMask,             XK_Left,         setlayout,       {.v = &layouts[4]} },
+  { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.v = &layouts[5]} },
   { MODKEY|ShiftMask,             XK_Up,           incnmaster,      {.i = +1 } },
   { MODKEY|ShiftMask,             XK_Down,         incnmaster,      {.i = -1 } },
   { MODKEY,                       XK_Tab,          toggleview,      {.i = -1} },

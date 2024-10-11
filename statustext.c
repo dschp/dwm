@@ -25,24 +25,30 @@ render_statustext(void)
   time_t now = time(NULL);
   struct tm *tm;
   char dtbuf[100];
+  char est[9], utc[9], jst[9], ltime[9], ldate[20];
   char *p = dtbuf;
 
   setenv("TZ", ":EST", 1);
   tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "EST: \x01\x04%R\x01\x01  ", tm);
+  strftime(est, sizeof(est), "%R", tm);
 
   tm = gmtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "UTC: \x01\x05%R\x01\x01  ", tm);
+  strftime(utc, sizeof(utc), "%R", tm);
 
   setenv("TZ", ":Asia/Tokyo", 1);
   tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "JST: \x01\x06%R\x01\x01  ", tm);
+  strftime(jst, sizeof(jst), "%R", tm);
 
   setenv("TZ", ":Asia/Bangkok", 1);
   tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "%F (%a)  \x01\x07%T\x01\x01 ", tm);
+  strftime(ldate, sizeof(ldate), "%F (%a)", tm);
+  strftime(ltime, sizeof(ltime), "%T", tm);
 
-  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), " [%d]", tm->tm_year + 1900 + 543);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "EST: %c%c%s%c%c  ", 1, 0x25, est, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "UTC: %c%c%s%c%c  ", 1, 0x26, utc, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "JST: %c%c%s%c%c  ", 1, 0x27, jst, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "%s  %c%c%s%c%c [%d]",
+		ldate, 1, 0x28, ltime, 1, 0x20, tm->tm_year + 1900 + 543);
 
   const size_t dt_len = p - dtbuf + 1;
   p = statustext;
