@@ -20,7 +20,6 @@
  *
  * To understand everything else, start reading main().
  */
-#include <dirent.h>
 #include <errno.h>
 #include <locale.h>
 #include <math.h>
@@ -47,6 +46,7 @@
 
 #include "drw.h"
 #include "util.h"
+#include "statustext.h"
 
 /* macros */
 #define BUTTONMASK              (ButtonPressMask|ButtonReleaseMask)
@@ -202,7 +202,6 @@ static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
-void renderstatustext(void);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
@@ -255,7 +254,6 @@ static void zoomormaximize(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
-static char statustext[512];
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -286,8 +284,7 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
-static char *status_dirpath;
-static time_t last_status_render;
+static struct timespec ts_last_drawbar;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -748,7 +745,7 @@ drawbar(Monitor *m)
 
   /* draw status first so it can be overdrawn by tags later */
   if (m == selmon) { /* status is only drawn on selected monitor */
-    renderstatustext();
+    render_statustext();
 
     char buf[sizeof(statustext)];
     char *p1 = statustext, *p2 = buf;
@@ -841,7 +838,9 @@ drawbar(Monitor *m)
       }
       x += w;
     }
-  }
+
+    clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
+ }
 
   w = TEXTW(m->ltsymbol);
   drw_setscheme(drw, scheme[SchemeNorm]);
@@ -1540,104 +1539,6 @@ recttomon(int x, int y, int w, int h)
 	return r;
 }
 
-int
-renderstatustext_filter(const struct dirent *entry)
-{
-  return entry->d_type == DT_REG;
-}
-
-void
-renderstatustext(void)
-{
-  time_t now = time(NULL);
-  if (now == last_status_render) return;
-
-  struct tm *tm;
-  char dtbuf[100];
-  char *p = dtbuf;
-
-  setenv("TZ", ":EST", 1);
-  tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "EST: \x01\x04%R\x01\x01  ", tm);
-
-  tm = gmtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "UTC: \x01\x05%R\x01\x01  ", tm);
-
-  setenv("TZ", ":Asia/Tokyo", 1);
-  tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "JST: \x01\x06%R\x01\x01  ", tm);
-
-  setenv("TZ", ":Asia/Bangkok", 1);
-  tm = localtime(&now);
-  p += strftime(p, sizeof(dtbuf) - (p - dtbuf), "%F (%a)  \x01\x07%T\x01\x01 ", tm);
-
-  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), " [%d]", tm->tm_year + 1900 + 543);
-
-  const size_t dt_len = p - dtbuf + 1;
-  p = statustext;
-
-  if (!status_dirpath) {
-    strcpy(p, dtbuf);
-    return;
-  }
-
-  struct dirent **namelist;
-  const int n = scandir(status_dirpath, &namelist, renderstatustext_filter, alphasort);
-  if (n == -1) {
-    p += snprintf(p, sizeof(statustext) - dt_len, "(scandir error) ");
-  } else {
-    const char *statbuf_cap = statustext + sizeof(statustext) - dt_len;
-    for (int i = 0; i < n; i++) {
-      if (i > STATUS_MAX_FILE || p >= statbuf_cap) {
-	free(namelist[i]);
-	continue;
-      }
-      char filepath[300];
-      snprintf(filepath, sizeof(filepath), "%s/%s", status_dirpath, namelist[i]->d_name);
-      free(namelist[i]);
-
-      const size_t remaining = statbuf_cap - p;
-
-      FILE *fp = fopen(filepath, "a+");
-      if (fp == NULL) {
-	p += snprintf(p, remaining, "(%d: fopen error: [%s]) ", i, filepath);
-	continue;
-      }
-
-      char readbuf[remaining];
-      int r = fread(readbuf, 1, sizeof(readbuf), fp);
-      fclose(fp);
-
-      if (r < 1) continue;
-
-      const char *rend = readbuf + r;
-      char *rp = readbuf;
-      while (rp < rend) {
-	switch (*rp) {
-	case '\n':
-	case '\r':
-	  if (statbuf_cap - p < STATUS_SEP_LEN) {
-	    rp = readbuf + remaining;
-	    break;
-	  }
-
-	  memcpy(p, status_separator, STATUS_SEP_LEN);
-	  p += STATUS_SEP_LEN;
-	  break;
-	default:
-	  *p = *rp;
-	  p++;
-	}
-	rp++;
-      }
-    }
-
-    free(namelist);
-  }
-
-  strcpy(p, dtbuf);
-}
-
 void
 resize(Client *c, int x, int y, int w, int h, int interact)
 {
@@ -1748,8 +1649,8 @@ run(void)
   XEvent ev;
   int x11_fd;
   fd_set in_fds;
-  struct timespec timer, last;
-  clock_gettime(CLOCK_MONOTONIC, &last);
+  struct timespec timer;
+  ts_last_drawbar.tv_sec = ts_last_drawbar.tv_nsec = 0;
 
   x11_fd = ConnectionNumber(dpy);
   /* main event loop */
@@ -1760,15 +1661,14 @@ run(void)
 
     clock_gettime(CLOCK_MONOTONIC, &timer);
 
-    timer.tv_sec -= last.tv_sec;
-    timer.tv_nsec -= last.tv_nsec;
+    timer.tv_sec -= ts_last_drawbar.tv_sec;
+    timer.tv_nsec -= ts_last_drawbar.tv_nsec;
     if (timer.tv_nsec < 0) {
       timer.tv_sec--;
       timer.tv_nsec += 1.0e9;
     }
     if (timer.tv_sec > 0) {
       drawbar(selmon);
-      clock_gettime(CLOCK_MONOTONIC, &last);
 
       timer.tv_sec = 1;
       timer.tv_nsec = 0;
@@ -1943,7 +1843,6 @@ setup(void)
 	Atom utf8string;
 	struct sigaction sa;
 
-	last_status_render = time(NULL);
 	status_dirpath = getenv(ENV_STATUS_DIR);
 
 	/* do not transform children into zombies when they terminate */
