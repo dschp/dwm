@@ -70,6 +70,8 @@ enum { /* color schemes */
   SchemeNmaster,
   SchemeMfactor,
   SchemeLayout,
+  SchemeTagged,
+  SchemeOverflow,
 };
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
@@ -884,6 +886,15 @@ drawbar(Monitor *m)
 		 m == selmon && m->sel && i == m->sel->tag_idx,
 		 is_urgent);
       }
+
+      if (m->sel && i == m->sel->tag_idx) {
+	drw_setscheme(drw, scheme[SchemeTagged]);
+	const size_t s = 3;
+	const size_t ix = x + w / 2 - 1, iy = bh - s;
+	for (int i = 0; i < s; i++)
+	  drw_rect(drw, ix-i, iy+i, 1 + i*2, 1, 1, 0);
+      }
+
       x += w;
     }
 
@@ -896,43 +907,43 @@ drawbar(Monitor *m)
       drw_setscheme(drw, scheme[SchemeNorm]);
       drw_rect(drw, x, 0, w, bh, 1, 1);
     } else {
-      char overflow[] = "...";
-      int ow = TEXTW(overflow);
-      int limit = m->ww - tw - ow;
+      const char overflow[] = "...";
+      const int ow = TEXTW(overflow);
+      const int limit = m->ww - tw;
 
-      for (c = m->stack; c; c = c->snext) {
+      c = m->stack;
+      for (int i = 0; c; c = c->snext, i++) {
 	if (!ISVISIBLE(c)) continue;
 
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
 
-	char buf[20 + sizeof(((Client){0}).name)];
-	const char *fmt = "[%s] %s";
-	const char *tname = tags[c->tag_idx];
-	if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
-	  fmt = "<%s> %s";
-	}
-	snprintf(buf, sizeof(buf), fmt, tname, c->name);
-
-	int tag_w = MIN(TEXTW(buf), BAR_CLIENT_MAX_WIDTH);
-	if (x + tag_w > limit) {
-	  drw_setscheme(drw, scheme[SchemeNorm]);
-	  drw_text(drw, limit, 0, ow, bh, lrpad / 2, overflow, 1);
-	  tw += ow;
+	char buf[20];
+	snprintf(buf, sizeof(buf), "[%d]", i);
+	w = TEXTW(buf);
+	if (x + w > limit) {
+	  x = limit;
 	  break;
 	}
+	drw_text(drw, x, 0, w, bh, lrpad / 2, buf, c == m->sel);
+	x += w;
 
-	drw_text(drw, x, 0, tag_w, bh, lrpad / 2, buf, c == m->sel);
+	size_t cw = MIN(TEXTW(c->name), BAR_CLIENT_MAX_WIDTH);
+	if (x + cw > limit) cw = limit - x;
+	drw_text(drw, x, 0, cw, bh, 0, c->name, c == m->sel);
+
 	if (c->isfloating)
 	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
 		   c == m->sel || c->isfixed, c == m->sel);
 
-	x += tag_w;
+	x += cw;
       }
 
-      w = m->ww - tw - x;
-      if (w > 0) {
+      if (x < limit) {
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_rect(drw, x, 0, w, bh, 1, 1);
+	drw_rect(drw, x, 0, limit - x, bh, 1, 1);
+      } else {
+	drw_setscheme(drw, scheme[SchemeOverflow]);
+	drw_text(drw, limit - ow, 0, ow, bh, lrpad / 2, overflow, 1);
       }
     }
   }
