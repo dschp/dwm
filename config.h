@@ -84,10 +84,10 @@ static const Layout layouts[] = {
 #define AltMask Mod1Mask
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
-  { MODKEY,                       KEY, toggleview,     {.i  = TAG} }, \
-  { MODKEY|ControlMask,           KEY, view,           {.i  = TAG} }, \
-  { MODKEY|ShiftMask,             KEY, tag,            {.ui = TAG} }, \
-  { MODKEY|AltMask,               KEY, tagandview,     {.ui = TAG} },
+  { MODKEY,                       KEY, toggleview,     {.ui = 1ULL << TAG} }, \
+  { MODKEY|ControlMask,           KEY, view,           {.ui = 1ULL << TAG} }, \
+  { MODKEY|ShiftMask,             KEY, tag,            {.ui = 1ULL << TAG} }, \
+  { MODKEY|AltMask,               KEY, toggletag,      {.ui = 1ULL << TAG} },
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -116,8 +116,7 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.v = &layouts[5]} },
   { MODKEY|ShiftMask,             XK_Up,           incnmaster,      {.i = +1 } },
   { MODKEY|ShiftMask,             XK_Down,         incnmaster,      {.i = -1 } },
-  { MODKEY,                       XK_Tab,          toggleview,      {.i = -1} },
-  { MODKEY|ControlMask,           XK_Tab,          view,            {.i = -1} },
+  { MODKEY,                       XK_Tab,          toggleview,      {.ui = 0 } },
   { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
   { MODKEY,                       XK_h,            setmfact,        {.f = -0.05 } },
