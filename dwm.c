@@ -925,15 +925,15 @@ drawbar(Monitor *m)
 	  break;
 	}
 	drw_text(drw, x, 0, w, bh, lrpad / 2, buf, c == m->sel);
+
+	if (c->isfloating)
+	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		   c == m->sel || c->isfixed, c == m->sel);
 	x += w;
 
 	size_t cw = MIN(TEXTW(c->name), BAR_CLIENT_MAX_WIDTH);
 	if (x + cw > limit) cw = limit - x;
 	drw_text(drw, x, 0, cw, bh, 0, c->name, c == m->sel);
-
-	if (c->isfloating)
-	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		   c == m->sel || c->isfixed, c == m->sel);
 
 	x += cw;
       }
