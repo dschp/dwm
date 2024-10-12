@@ -164,7 +164,6 @@ static void arrange(Monitor *m);
 static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
-void bringupclients(uint64_t tags);
 static void buttonpress(XEvent *e);
 static void centerwindow(const Arg *arg);
 static void checkotherwm(void);
@@ -185,6 +184,7 @@ static void expose(XEvent *e);
 static void focus(Client *c);
 static void focusin(XEvent *e);
 static void focusstack(const Arg *arg);
+void focus_1st_visible(uint64_t tags, int unfocus_if_not_found);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
@@ -197,6 +197,7 @@ static void gridtileleft(Monitor *m);
 static void gridtileright(Monitor *m);
 Client* grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, size_t h);
 static void incnmaster(const Arg *arg);
+void justfocus(Client *c);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
@@ -448,53 +449,6 @@ attachstack(Client *c)
 {
 	c->snext = c->mon->stack;
 	c->mon->stack = c;
-}
-
-void
-bringupclients(uint64_t tags)
-{
-  if (!tags || !selmon->stack) return;
-
-  Client *new_focus = NULL, *ns_start = NULL, *ns_end = NULL;
-  for (Client *c = selmon->stack, *c2 = NULL;;) {
-    c2 = c->snext;
-    if (!c2) {
-      if (ns_start) {
-	ns_end->snext = selmon->stack;
-	selmon->stack = ns_start;
-      }
-      if ((c = new_focus) != NULL) {
-	unfocus(selmon->sel, 0);
-
-	grabbuttons(c, 1);
-	XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
-	setfocus(c);
-	selmon->sel = c;
-      }
-      break;
-    }
-
-    if (1ULL << c2->tag_idx & tags) {
-      if (c2->isfloating) {
-	c->snext = c2->snext;
-	if (!ns_start) {
-	  ns_start = ns_end = c2;
-	} else {
-	  ns_end->snext = c2;
-	  ns_end = c2;
-	}
-
-	XRaiseWindow(dpy, c2->win);
-	if (!new_focus || !new_focus->isfloating)
-	  new_focus = c2;
-	continue;
-      } else {
-	if (!new_focus) new_focus = c2;
-      }
-    }
-
-    c = c2;
-  }
 }
 
 void
@@ -911,8 +865,8 @@ drawbar(Monitor *m)
       const int ow = TEXTW(overflow);
       const int limit = m->ww - tw;
 
-      c = m->stack;
-      for (int i = 0; c; c = c->snext, i++) {
+      c = m->clients;
+      for (int i = 0; c; c = c->next, i++) {
 	if (!ISVISIBLE(c)) continue;
 
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
@@ -1048,6 +1002,31 @@ focusstack(const Arg *arg)
 		focus(c);
 		restack(selmon);
 	}
+}
+
+
+void
+focus_1st_visible(uint64_t tags, int unfocus_if_not_found)
+{
+  Client *c, *tiled_candidate = NULL;
+  for (c = selmon->stack; c; c = c->snext) {
+    if (1ULL << c->tag_idx & tags) {
+      if (!tiled_candidate) tiled_candidate = c;
+      if (c->isfloating) {
+	justfocus(c);
+	return;
+      }
+    }
+  }
+  if (tiled_candidate) {
+    justfocus(tiled_candidate);
+    return;
+  }
+
+  if (unfocus_if_not_found && !c) {
+    unfocus(selmon->sel, 0);
+    selmon->sel = NULL;
+  }
 }
 
 Atom
@@ -1273,6 +1252,19 @@ incnmaster(const Arg *arg)
 {
 	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
 	arrange(selmon);
+}
+
+void
+justfocus(Client *c)
+{
+  if (!c) return;
+
+  unfocus(selmon->sel, 0);
+
+  grabbuttons(c, 1);
+  XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
+  setfocus(c);
+  selmon->sel = c;
 }
 
 #ifdef XINERAMA
@@ -2270,17 +2262,14 @@ toggleview(const Arg *arg)
   selmon->last_toggled_tags = arg_tag;
   uint64_t added = newtags & arg_tag;
 
-  if (arg->i < 0) {
+  if (arg->i < 0 || !added) {
     validate_spawn_tag_idx();
-    bringupclients(added);
-    if (!selmon->sel || !(1ULL << selmon->sel->tag_idx & newtags))
-      focus(NULL);
-  } else if (added) {
-    selmon->spawn_tag_idx = arg->i;
-    bringupclients(added);
+    if (selmon->sel && !(1ULL << selmon->sel->tag_idx & newtags)) {
+      focus_1st_visible(newtags, 1);
+    }
   } else {
-    validate_spawn_tag_idx();
-    focus(NULL);
+    selmon->spawn_tag_idx = arg->i;
+    focus_1st_visible(added, 0);
   }
 
   arrange(selmon);
@@ -2611,7 +2600,7 @@ viewclients(const Arg *arg)
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
   validate_spawn_tag_idx();
-  bringupclients(newtags & selmon->last_toggled_tags);
+  focus_1st_visible(newtags & selmon->last_toggled_tags, 1);
   arrange(selmon);
 }
 
