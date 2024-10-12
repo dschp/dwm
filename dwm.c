@@ -451,19 +451,19 @@ attachstack(Client *c)
 void
 bringupclients(uint64_t tags)
 {
-  if (!tags) return;
+  if (!tags || !selmon->stack) return;
 
-  Client *ns_start = NULL, *ns_end = NULL;
-  for (Client *c = selmon->stack, *c2 = NULL; c;) {
+  Client *new_focus = NULL, *ns_start = NULL, *ns_end = NULL;
+  for (Client *c = selmon->stack, *c2 = NULL;;) {
     c2 = c->snext;
     if (!c2) {
       if (ns_start) {
 	ns_end->snext = selmon->stack;
 	selmon->stack = ns_start;
-
+      }
+      if ((c = new_focus) != NULL) {
 	unfocus(selmon->sel, 0);
 
-	c = ns_start;
 	grabbuttons(c, 1);
 	XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
 	setfocus(c);
@@ -473,17 +473,25 @@ bringupclients(uint64_t tags)
     }
 
     if (1ULL << c2->tag_idx & tags) {
-      c->snext = c2->snext;
-      if (!ns_start) {
-	ns_start = ns_end = c2;
+      if (c2->isfloating) {
+	c->snext = c2->snext;
+	if (!ns_start) {
+	  ns_start = ns_end = c2;
+	} else {
+	  ns_end->snext = c2;
+	  ns_end = c2;
+	}
+
+	XRaiseWindow(dpy, c2->win);
+	if (!new_focus || !new_focus->isfloating)
+	  new_focus = c2;
+	continue;
       } else {
-	ns_end->snext = c2;
-	ns_end = c2;
+	if (!new_focus) new_focus = c2;
       }
-      XRaiseWindow(dpy, c2->win);
-    } else {
-      c = c2;
     }
+
+    c = c2;
   }
 }
 
