@@ -35,10 +35,10 @@ static const char *colors[][3]      = {
   /*                   fg            bg         border       status */
   [SchemeNorm]     = { col_fg1,      col_bg2,   col_bdr2 }, /* 0x20 */
   [SchemeSel]      = { col_cyan1,    col_bg1,   col_bdr1 }, /* 0x21 */
-  [SchemeSpawn]    = { col_green,    col_bg1,   col_bdr1 }, /* 0x22 */
-  [SchemeNmaster]  = { col_nmaster,  col_bg3,   col_bdr2 }, /* 0x23 */
-  [SchemeMfactor]  = { col_mfactor,  col_bg3,   col_bdr2 }, /* 0x24 */
-  [SchemeLayout]   = { col_yellow,   col_bg3,   col_bdr2 }, /* 0x25 */
+  [SchemeLayout]   = { col_green,    col_bg1,   col_bdr1 }, /* 0x22 */
+  [SchemeValue1]   = { col_nmaster,  col_bg3,   col_bdr2 }, /* 0x23 */
+  [SchemeValue2]   = { col_mfactor,  col_bg3,   col_bdr2 }, /* 0x24 */
+  [SchemeValue3]   = { col_yellow,   col_bg3,   col_bdr2 }, /* 0x25 */
   [SchemeTagged]   = { col_gray,     col_bg1,   col_bdr2 }, /* 0x26 */
   [SchemeOverflow] = { col_fg1,      col_bg2,   col_bdr2 }, /* 0x27 */
                      { col_yellow,   col_bg2,   col_bdr2 }, /* 0x28 */

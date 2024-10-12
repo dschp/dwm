@@ -66,10 +66,10 @@ enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { /* color schemes */
   SchemeNorm,
   SchemeSel,
-  SchemeSpawn,
-  SchemeNmaster,
-  SchemeMfactor,
   SchemeLayout,
+  SchemeValue1,
+  SchemeValue2,
+  SchemeValue3,
   SchemeTagged,
   SchemeOverflow,
 };
@@ -793,9 +793,9 @@ drawbar(Monitor *m)
   x = 0;
 
   {
-    w = TEXTW(tags[m->spawn_tag_idx]);
-    drw_setscheme(drw, scheme[SchemeSpawn]);
-    drw_text(drw, x, 0, w, bh, lrpad / 2, tags[m->spawn_tag_idx], 1);
+    w = TEXTW(m->ltsymbol);
+    drw_setscheme(drw, scheme[SchemeLayout]);
+    drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 1);
     x += w;
   }
 
@@ -813,19 +813,15 @@ drawbar(Monitor *m)
 
     snprintf(buf, sizeof(buf), "%d", m->nmaster);
     w = TEXTW(buf);
-    drw_setscheme(drw, scheme[SchemeNmaster]);
+    drw_setscheme(drw, scheme[SchemeValue1]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
     x += w;
 
     snprintf(buf, sizeof(buf), "%.2f", m->mfact);
     w = TEXTW_(buf) + lrpad / 2;
-    drw_setscheme(drw, scheme[SchemeMfactor]);
+    drw_setscheme(drw, scheme[SchemeValue2]);
     drw_text(drw, x, 0, w, bh, 0, buf, 0);
     x += w;
-
-    w = TEXTW_(m->ltsymbol) + lrpad /2;
-    drw_setscheme(drw, scheme[SchemeLayout]);
-    x = drw_text(drw, x, 0, w, bh, 0, m->ltsymbol, 0);
   }
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
@@ -872,25 +868,37 @@ drawbar(Monitor *m)
 
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
 
-	char buf[20];
-	snprintf(buf, sizeof(buf), "[%d]", i);
-	w = TEXTW(buf);
+	//char buf[20];
+
+	char open[] = "[";
+	//snprintf(buf, sizeof(buf), "[", i);
+	w = TEXTW(open);
 	if (x + w > limit) {
 	  x = limit;
 	  break;
 	}
-	drw_text(drw, x, 0, w, bh, lrpad / 2, buf, c == m->sel);
+	drw_text(drw, x, 0, w, bh, lrpad / 2, open, c == m->sel);
 
 	if (c->isfloating)
 	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
 		   c == m->sel || c->isfixed, c == m->sel);
 	x += w;
 
-	size_t cw = MIN(TEXTW(c->name), BAR_CLIENT_MAX_WIDTH);
+	size_t cw = MIN(TEXTW_(c->name), BAR_CLIENT_MAX_WIDTH);
 	if (x + cw > limit) cw = limit - x;
 	drw_text(drw, x, 0, cw, bh, 0, c->name, c == m->sel);
 
 	x += cw;
+
+	char close[] = "]";
+	w = TEXTW(close);
+	if (x + w > limit) {
+	  x = limit;
+	  break;
+	}
+	drw_text(drw, x, 0, w, bh, lrpad / 2, close, c == m->sel);
+
+	x += w;
       }
 
       if (x < limit) {
