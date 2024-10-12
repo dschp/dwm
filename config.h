@@ -37,10 +37,11 @@ static const char *colors[][3]      = {
   [SchemeSpawn]   = { col_green,    col_bg1,   col_bdr1 }, /* 2 */
   [SchemeNmaster] = { col_nmaster,  col_bg3,   col_bdr2 }, /* 3 */
   [SchemeMfactor] = { col_mfactor,  col_bg3,   col_bdr2 }, /* 4 */
-                    { col_yellow,   col_bg2,   col_bdr2 }, /* 5 */
-                    { col_green,    col_bg2,   col_bdr2 }, /* 6 */
-                    { col_red,      col_bg2,   col_bdr2 }, /* 7 */
-                    { col_aqua,     col_bg2,   col_bdr2 }, /* 8 */
+  [SchemeLayout]  = { col_yellow,   col_bg3,   col_bdr2 }, /* 5 */
+                    { col_yellow,   col_bg2,   col_bdr2 }, /* 6 */
+                    { col_green,    col_bg2,   col_bdr2 }, /* 7 */
+                    { col_red,      col_bg2,   col_bdr2 }, /* 8 */
+                    { col_aqua,     col_bg2,   col_bdr2 }, /* 9 */
 };
 
 /* tagging */
@@ -136,9 +137,11 @@ static Key keys[] = {
   { MODKEY|AltMask|ShiftMask,     XK_j,            movepointer,     {.i = +1 } },
   { MODKEY|AltMask|ShiftMask,     XK_k,            movepointer,     {.i = -1 } },
   { MODKEY|AltMask|ShiftMask,     XK_l,            moveclient_h,    {.f = +1.0 } },
-  { MODKEY,                       XK_space,        zoomormaximize,  {0} },
+  { MODKEY,                       XK_space,        zoom,            {0} },
+  { MODKEY,                       XK_space,        maximize,        {0} },
   { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
   { MODKEY|ShiftMask,             XK_space,        togglefloating,  {0} },
+  { MODKEY|ShiftMask,             XK_space,        centerwindow,    {0} },
   TAGKEYS(                        XK_grave,                         0)
   TAGKEYS(                        XK_1,                             1)
   TAGKEYS(                        XK_2,                             2)

@@ -63,7 +63,14 @@
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNorm, SchemeSel, SchemeSpawn, SchemeNmaster, SchemeMfactor }; /* color schemes */
+enum { /* color schemes */
+  SchemeNorm,
+  SchemeSel,
+  SchemeSpawn,
+  SchemeNmaster,
+  SchemeMfactor,
+  SchemeLayout,
+};
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
        NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
@@ -193,6 +200,7 @@ static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
+static void maximize(const Arg *arg);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
@@ -255,7 +263,7 @@ static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
 static int xerrorstart(Display *dpy, XErrorEvent *ee);
-static void zoomormaximize(const Arg *arg);
+static void zoom(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
@@ -849,11 +857,11 @@ drawbar(Monitor *m)
     drw_setscheme(drw, scheme[SchemeMfactor]);
     drw_text(drw, x, 0, w, bh, 0, buf, 0);
     x += w;
-  }
 
-  w = TEXTW(m->ltsymbol);
-  drw_setscheme(drw, scheme[SchemeNorm]);
-  x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+    w = TEXTW_(m->ltsymbol) + lrpad /2;
+    drw_setscheme(drw, scheme[SchemeLayout]);
+    x = drw_text(drw, x, 0, w, bh, 0, m->ltsymbol, 0);
+  }
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
     uint64_t selected = bit & m->tags;
@@ -907,7 +915,9 @@ drawbar(Monitor *m)
 
 	drw_text(drw, x, 0, tag_w, bh, lrpad / 2, buf, c == m->sel);
 	if (c->isfloating)
-	  drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, 0);
+	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		   c == m->sel || c->isfixed, c == m->sel);
+
 	x += tag_w;
       }
 
@@ -1370,6 +1380,32 @@ maprequest(XEvent *e)
 		return;
 	if (!wintoclient(ev->window))
 		manage(ev->window, &wa);
+}
+
+void
+maximize(const Arg *arg)
+{
+  Client *c = selmon->sel;
+  if (!c || !c->isfloating) return;
+
+  switch (c->ismaximized) {
+  case 1:
+    resize(c, selmon->wx, selmon->wy, selmon->mw - 2 * c->bw, selmon->mh - 2 * c->bw, 0);
+    c->ismaximized = 2;
+    break;
+  case 2:
+    resize(c, c->origx, c->origy, c->origw, c->origh, 0);
+    c->ismaximized = 0;
+    break;
+  default:
+    c->origx = c->x;
+    c->origy = c->y;
+    c->origw = c->w;
+    c->origh = c->h;
+    resize(c, selmon->wx, selmon->wy, selmon->ww - 2 * c->bw, selmon->wh - 2 * c->bw, 0);
+    c->ismaximized = 1;
+  }
+
 }
 
 void
@@ -2627,31 +2663,10 @@ xerrorstart(Display *dpy, XErrorEvent *ee)
 }
 
 void
-zoomormaximize(const Arg *arg)
+zoom(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (!c) return;
-
-  if (c->isfloating) {
-    switch (c->ismaximized) {
-    case 1:
-      resize(c, selmon->wx, selmon->wy, selmon->mw - 2 * c->bw, selmon->mh - 2 * c->bw, 0);
-      c->ismaximized = 2;
-      break;
-    case 2:
-      resize(c, c->origx, c->origy, c->origw, c->origh, 0);
-      c->ismaximized = 0;
-      break;
-    default:
-      c->origx = c->x;
-      c->origy = c->y;
-      c->origw = c->w;
-      c->origh = c->h;
-      resize(c, selmon->wx, selmon->wy, selmon->ww - 2 * c->bw, selmon->wh - 2 * c->bw, 0);
-      c->ismaximized = 1;
-    }
-    return;
-  }
+  if (!c || c->isfloating) return;
 
   if (!selmon->lt[selmon->sellt]->arrange)
     return;
