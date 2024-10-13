@@ -2210,34 +2210,34 @@ void
 snapandcenter_x(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int x;
-    if (arg->i < 0) {
-      x = selmon->wx;
-    } else {
-      x = selmon->ww - c->w - 2 * c->bw;
-    }
-    int y = (selmon->wh - c->h) / 2;
+  if (!c || !c->floating) return;
 
-    moveclient(c, x, y, c->w, c->h);
+  int x;
+  if (arg->i < 0) {
+    x = selmon->wx;
+  } else {
+    x = selmon->ww - c->w - 2 * c->bw;
   }
+  int y = (selmon->wh - c->h) / 2;
+
+  moveclient(c, x, y, c->w, c->h);
 }
 
 void
 snapandcenter_y(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int x = (selmon->ww - c->w) / 2;
-    int y;
-    if (arg->i < 0) {
-      y = selmon->wy;
-    } else {
-      y = selmon->wh - c->h - 2 * c->bw;
-    }
+  if (!c || !c->floating) return;
 
-    moveclient(c, x, y, c->w, c->h);
+  int x = (selmon->ww - c->w) / 2;
+  int y;
+  if (arg->i < 0) {
+    y = selmon->wy;
+  } else {
+    y = selmon->wh - c->h - 2 * c->bw;
   }
+
+  moveclient(c, x, y, c->w, c->h);
 }
 
 void
