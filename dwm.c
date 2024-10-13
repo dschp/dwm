@@ -1471,70 +1471,70 @@ void
 moveclient_x(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int x;
-    if (arg->f < 0.0) {
-      x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
-    } else {
-      x = MIN(c->x + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - c->w - 2 * c->bw);
-    }
+  if (!c || !c->isfloating) return;
 
-    moveclient(c, x, c->y, c->w, c->h);
+  int x;
+  if (arg->f < 0.0) {
+    x = MAX(c->x + ((int) selmon->ww * MAX(arg->f, -1.0)), selmon->wx);
+  } else {
+    x = MIN(c->x + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - c->w - 2 * c->bw);
   }
+
+  moveclient(c, x, c->y, c->w, c->h);
 }
 
 void
 moveclient_y(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int y;
-    if (arg->f < 0.0) {
-      y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
-    } else {
-      y = MIN(c->y + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - c->h - 2 * c->bw);
-    }
+  if (!c || !c->isfloating) return;
 
-    moveclient(c, c->x, y, c->w, c->h);
+  int y;
+  if (arg->f < 0.0) {
+    y = MAX(c->y + ((int) selmon->wh * MAX(arg->f, -1.0)), selmon->wy);
+  } else {
+    y = MIN(c->y + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - c->h - 2 * c->bw);
   }
+
+  moveclient(c, c->x, y, c->w, c->h);
 }
 
 void
 moveclient_w(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int x = c->x;
-    int w;
-    if (arg->f < 0.0) {
-      w = MAX(c->w + ((int) selmon->ww * MAX(arg->f, -1.0)), 100);
-    } else {
-      w = MIN(c->w + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - 2 * c->bw);
-      int diff = (x + w) - (selmon->ww - 2 * c->bw);
-      if (diff > 0) x -= diff;
-    }
+  if (!c || !c->isfloating) return;
 
-    moveclient(c, x, c->y, w, c->h);
+  int x = c->x;
+  int w;
+  if (arg->f < 0.0) {
+    w = MAX(c->w + ((int) selmon->ww * MAX(arg->f, -1.0)), 100);
+  } else {
+    w = MIN(c->w + ((int) selmon->ww * MIN(arg->f, 1.0)), selmon->ww - 2 * c->bw);
+    int diff = (x + w) - (selmon->ww - 2 * c->bw);
+    if (diff > 0) x -= diff;
   }
+
+  moveclient(c, x, c->y, w, c->h);
 }
 
 void
 moveclient_h(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (c && c->isfloating) {
-    int y = c->y;
-    int h;
-    if (arg->f < 0.0) {
-      h = MAX(c->h + ((int) selmon->wh * MAX(arg->f, -1.0)), 100);
-    } else {
-      h = MIN(c->h + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - 2 * c->bw);
-      int diff = (y + h) - (selmon->wh - 2 * c->bw);
-      if (diff > 0) y -= diff;
-    }
+  if (!c || !c->isfloating) return;
 
-    moveclient(c, c->x, y, c->w, h);
+  int y = c->y;
+  int h;
+  if (arg->f < 0.0) {
+    h = MAX(c->h + ((int) selmon->wh * MAX(arg->f, -1.0)), 100);
+  } else {
+    h = MIN(c->h + ((int) selmon->wh * MIN(arg->f, 1.0)), selmon->wh - 2 * c->bw);
+    int diff = (y + h) - (selmon->wh - 2 * c->bw);
+    if (diff > 0) y -= diff;
   }
+
+  moveclient(c, c->x, y, c->w, h);
 }
 
 void
@@ -1634,6 +1634,8 @@ movepointer(const Arg *arg)
 void
 movestack(const Arg *arg)
 {
+  if (!selmon->sel || selmon->sel->isfloating) return;
+
   Client *c = NULL, *p = NULL, *pc = NULL, *i;
 
   if(arg->i > 0) {
