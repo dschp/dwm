@@ -183,7 +183,7 @@ static void expose(XEvent *e);
 static void focus(Client *c);
 static void focusin(XEvent *e);
 static void focusstack(const Arg *arg);
-void focus_1st_visible(uint64_t tags, int unfocus_if_not_found);
+void focus_1st_visible(uint64_t tags);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
@@ -992,7 +992,7 @@ focusstack(const Arg *arg)
 
 
 void
-focus_1st_visible(uint64_t tags, int unfocus_if_not_found)
+focus_1st_visible(uint64_t tags)
 {
   Client *c, *tiled_candidate = NULL;
   for (c = selmon->stack; c; c = c->snext) {
@@ -1009,7 +1009,7 @@ focus_1st_visible(uint64_t tags, int unfocus_if_not_found)
     return;
   }
 
-  if (unfocus_if_not_found && !c) {
+  if (!selmon->sel && !(selmon->sel->tags & tags)) {
     unfocus(selmon->sel, 0);
     selmon->sel = NULL;
   }
@@ -2298,10 +2298,10 @@ toggleview(const Arg *arg)
 
   if (arg->i < 0 || !added) {
     if (selmon->sel && !(selmon->sel->tags & newtags)) {
-      focus_1st_visible(newtags, 1);
+      focus_1st_visible(newtags);
     }
   } else {
-    focus_1st_visible(added, 0);
+    focus_1st_visible(added);
   }
 
   arrange(selmon);
@@ -2620,7 +2620,7 @@ viewclients(const Arg *arg)
 
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
-  focus_1st_visible(newtags & selmon->last_toggled_tags, 1);
+  focus_1st_visible(newtags);
   arrange(selmon);
 }
 
