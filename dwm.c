@@ -53,7 +53,8 @@
 #define CLEANMASK(mask)         (mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
 #define INTERSECT(x,y,w,h,m)    (MAX(0, MIN((x)+(w),(m)->wx+(m)->ww) - MAX((x),(m)->wx)) \
                                * MAX(0, MIN((y)+(h),(m)->wy+(m)->wh) - MAX((y),(m)->wy)))
-#define ISVISIBLE(C)            ((C->tags & C->mon->tags))
+#define WORKSPACE(M)            (&(M->workspaces[M->ws_idx]))
+#define ISVISIBLE(C)            ((C->tags & WORKSPACE(C->mon)->tags))
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
@@ -126,37 +127,6 @@ typedef struct {
 } Layout;
 
 typedef struct {
-  uint64_t tags;
-  const Layout *layout;
-  float mfact;
-  int nmaster;
-} Memory;
-
-struct Monitor {
-  char ltsymbol[16];
-  float mfact;
-  int nmaster;
-  int num;
-  int by;               /* bar geometry */
-  int mx, my, mw, mh;   /* screen size */
-  int wx, wy, ww, wh;   /* window area  */
-  uint64_t tags;
-  uint64_t last_toggled_tags;
-  uint64_t spawn_tags;
-  int last_memorized;
-  int showbar;
-  int topbar;
-  Client *clients;
-  Client *sel;
-  Client *stack;
-  Monitor *next;
-  Window barwin;
-  uint8_t sellt;
-  const Layout *lt[2];
-  int pointer_oldx, pointer_oldy;
-};
-
-typedef struct {
 	const char *class;
 	const char *instance;
 	const char *title;
@@ -164,6 +134,15 @@ typedef struct {
 	int isfloating;
 	int monitor;
 } Rule;
+
+typedef struct {
+  uint64_t tags;
+  const Layout *layout;
+  float mfact;
+  int nmaster;
+  uint64_t last_toggled_tags;
+  uint64_t spawn_tags;
+} Workspace;
 
 /* function declarations */
 static void applyrules(Client *c);
@@ -181,6 +160,7 @@ static void clientmessage(XEvent *e);
 static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
+static void copyworkspace(const Arg *arg);
 static Monitor *createmon(void);
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
@@ -212,7 +192,6 @@ static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void maximize(const Arg *arg);
-static void memorizeviews(const Arg *arg);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
@@ -227,7 +206,6 @@ static Client *nexttiled(Client *c);
 static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
-static void recallviews(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
@@ -244,10 +222,12 @@ static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
+static void setworkspace(size_t i, int copy);
 static void showhide(Client *c);
 static void snapandcenter_x(const Arg *arg);
 static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
+static void switchworkspace(const Arg *arg);
 static void tag(const Arg *arg);
 void tile(Monitor *m, int right);
 static void tileleft(Monitor *m);
@@ -315,7 +295,24 @@ static struct timespec ts_last_drawbar;
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
-static Memory viewmemory[LENGTH(memorytags)];
+struct Monitor {
+  char ltsymbol[16];
+  uint8_t ws_idx;
+  uint8_t last_ws_idx;
+  Workspace workspaces[LENGTH(workspaces)];
+  int num;
+  int by;               /* bar geometry */
+  int mx, my, mw, mh;   /* screen size */
+  int wx, wy, ww, wh;   /* window area  */
+  int showbar;
+  int topbar;
+  Client *clients;
+  Client *sel;
+  Client *stack;
+  Monitor *next;
+  Window barwin;
+  int pointer_oldx, pointer_oldy;
+};
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 63 ? -1 : 1]; };
@@ -349,17 +346,18 @@ applyrules(Client *c)
 				c->mon = m;
 		}
 	}
+	const Workspace *ws = WORKSPACE(c->mon);
 	if (ch.res_class)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
 	if (!(c->tags & TAGMASK)) {
-	  if (c->mon->spawn_tags)
-	    c->tags = c->mon->spawn_tags;
+	  if (ws->spawn_tags)
+	    c->tags = ws->spawn_tags;
 	  else if (c->mon->sel)
 	    c->tags = c->mon->sel->tags;
 	  else
-	    c->tags = c->mon->tags & -(c->mon->tags);
+	    c->tags = ws->tags & -(ws->tags);
 	}
 }
 
@@ -395,7 +393,7 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 		*h = bh;
 	if (*w < bh)
 		*w = bh;
-	if (resizehints || c->isfloating || !c->mon->lt[c->mon->sellt]->arrange) {
+	if (resizehints || c->isfloating || !WORKSPACE(c->mon)->layout->arrange) {
 		if (!c->hintsvalid)
 			updatesizehints(c);
 		/* see last two sentences in ICCCM 4.1.2.3 */
@@ -448,9 +446,10 @@ arrange(Monitor *m)
 void
 arrangemon(Monitor *m)
 {
-	strncpy(m->ltsymbol, m->lt[m->sellt]->symbol, sizeof m->ltsymbol);
-	if (m->lt[m->sellt]->arrange)
-		m->lt[m->sellt]->arrange(m);
+  const Layout *l = WORKSPACE(m)->layout;
+  strncpy(m->ltsymbol, l->symbol, sizeof m->ltsymbol);
+
+  if (l->arrange) l->arrange(m);
 }
 
 void
@@ -526,11 +525,13 @@ cleanup(void)
 	Monitor *m;
 	size_t i;
 
-	selmon->tags = ~0;
-	selmon->lt[selmon->sellt] = &foo;
-	for (m = mons; m; m = m->next)
+	for (int i = 0; i < LENGTH(workspaces); i++)
+		selmon->workspaces[i].tags = ~0;
+	for (m = mons; m; m = m->next) {
+		WORKSPACE(m)->layout = &foo;
 		while (m->stack)
 			unmanage(m->stack, 0);
+	}
 	XUngrabKey(dpy, AnyKey, AnyModifier, root);
 	while (mons)
 		cleanupmon(mons);
@@ -639,7 +640,7 @@ configurerequest(XEvent *e)
 	if ((c = wintoclient(ev->window))) {
 		if (ev->value_mask & CWBorderWidth)
 			c->bw = ev->border_width;
-		else if (c->isfloating || !selmon->lt[selmon->sellt]->arrange) {
+		else if (c->isfloating || !WORKSPACE(selmon)->layout->arrange) {
 			m = c->mon;
 			if (ev->value_mask & CWX) {
 				c->oldx = c->x;
@@ -686,17 +687,28 @@ createmon(void)
 	Monitor *m;
 
 	m = ecalloc(1, sizeof(Monitor));
-	m->tags = m->last_toggled_tags = 1;
-	m->mfact = mfact;
-	m->nmaster = nmaster;
+	m->ws_idx = 0;
+	m->last_ws_idx = 0;
+	for (int i = 0; i < LENGTH(workspaces); i++) {
+	  m->workspaces[i].layout = &layouts[0];
+	  m->workspaces[i].tags = 1;
+	  m->workspaces[i].mfact = mfact;
+	  m->workspaces[i].nmaster = nmaster;
+	  m->workspaces[i].last_toggled_tags = 0;
+	  m->workspaces[i].spawn_tags = 0;
+	}
 	m->showbar = showbar;
 	m->topbar = topbar;
-	m->lt[0] = &layouts[0];
-	m->lt[1] = &layouts[1 % LENGTH(layouts)];
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
-	m->spawn_tags = 0;
-	m->last_memorized = -1;
 	return m;
+}
+
+void
+copyworkspace(const Arg *arg)
+{
+  if (!arg) return;
+
+  setworkspace(arg->i < 0 ? selmon->last_ws_idx : arg->i, 1);
 }
 
 void
@@ -805,12 +817,15 @@ drawbar(Monitor *m)
     if (c->isurgent) urg |= c->tags;
   }
 
+  const Workspace *ws = WORKSPACE(m);
   x = 0;
 
   {
-    w = TEXTW(m->ltsymbol);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%s", workspaces[m->ws_idx]);
+    w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeLayout]);
-    drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 1);
+    drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 1);
     x += w;
   }
 
@@ -826,29 +841,26 @@ drawbar(Monitor *m)
   {
     char buf[32];
 
-    snprintf(buf, sizeof(buf), "%d", m->nmaster);
+    snprintf(buf, sizeof(buf), "%d", ws->nmaster);
     w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeValue1]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
     x += w;
 
-    snprintf(buf, sizeof(buf), "%.2f", m->mfact);
+    snprintf(buf, sizeof(buf), "%.2f", ws->mfact);
     w = TEXTW_(buf) + lrpad / 2;
     drw_setscheme(drw, scheme[SchemeValue2]);
     drw_text(drw, x, 0, w, bh, 0, buf, 0);
     x += w;
 
-    if (selmon->last_memorized >=0) {
-      snprintf(buf, sizeof(buf), "%s", memorytags[m->last_memorized]);
-      w = TEXTW_(buf) + lrpad / 2;
-      drw_setscheme(drw, scheme[SchemeValue3]);
-      drw_text(drw, x, 0, w, bh, 0, buf, 0);
-      x += w;
-    }
+    w = TEXTW_(m->ltsymbol) + lrpad / 2;
+    drw_setscheme(drw, scheme[SchemeValue3]);
+    drw_text(drw, x, 0, w, bh, 0, m->ltsymbol, 0);
+    x += w;
   }
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
-    uint64_t selected = bit & m->tags;
+    uint64_t selected = bit & WORKSPACE(m)->tags;
     uint64_t has_client = bit & occ;
     uint64_t is_urgent = bit & urg;
     if (selected || has_client) {
@@ -1182,21 +1194,22 @@ gridtile(Monitor *m, int right)
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  if (!m->nmaster) {
+  const Workspace *ws = WORKSPACE(m);
+  if (!ws->nmaster) {
     mw = m_cnt = 0;
-  } else if (n > m->nmaster) {
-    mw = m->ww * m->mfact;
-    m_cnt = m->nmaster;
+  } else if (n > ws->nmaster) {
+    mw = m->ww * ws->mfact;
+    m_cnt = ws->nmaster;
   } else {
     mw = m->ww;
     m_cnt = n;
   }
 
   c = nexttiled(m->clients);
-  if (m->nmaster) {
-    if (n > m->nmaster) {
-      mw = m->ww * m->mfact;
-      m_cnt = m->nmaster;
+  if (ws->nmaster) {
+    if (n > ws->nmaster) {
+      mw = m->ww * ws->mfact;
+      m_cnt = ws->nmaster;
     } else {
       mw = m->ww;
       m_cnt = n;
@@ -1267,8 +1280,8 @@ grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, siz
 void
 incnmaster(const Arg *arg)
 {
-	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
-	selmon->last_memorized = -1;
+	Workspace *ws = WORKSPACE(selmon);
+	ws->nmaster = MAX(ws->nmaster + arg->i, 0);
 	arrange(selmon);
 }
 
@@ -1438,20 +1451,6 @@ maximize(const Arg *arg)
 }
 
 void
-memorizeviews(const Arg *arg)
-{
-  if (arg->i < 0 || arg->i >= LENGTH(viewmemory)) return;
-
-  selmon->last_memorized = arg->i;
-  viewmemory[arg->i].tags = selmon->tags;
-  viewmemory[arg->i].layout = selmon->lt[selmon->sellt];
-  viewmemory[arg->i].nmaster = selmon->nmaster;
-  viewmemory[arg->i].mfact = selmon->mfact;
-
-  drawbar(selmon);
-}
-
-void
 monocle(Monitor *m)
 {
   for (Client *c = nexttiled(m->clients); c; c = nexttiled(c->next))
@@ -1596,10 +1595,10 @@ movemouse(const Arg *arg)
 				ny = selmon->wy;
 			else if (abs((selmon->wy + selmon->wh) - (ny + HEIGHT(c))) < snap)
 				ny = selmon->wy + selmon->wh - HEIGHT(c);
-			if (!c->isfloating && selmon->lt[selmon->sellt]->arrange
+			if (!c->isfloating && WORKSPACE(selmon)->layout->arrange
 			&& (abs(nx - c->x) > snap || abs(ny - c->y) > snap))
 				togglefloating(NULL);
-			if (!selmon->lt[selmon->sellt]->arrange || c->isfloating)
+			if (!WORKSPACE(selmon)->layout->arrange || c->isfloating)
 				resize(c, nx, ny, c->w, c->h, 1);
 			break;
 		}
@@ -1758,30 +1757,6 @@ quit(const Arg *arg)
 	running = 0;
 }
 
-void
-recallviews(const Arg *arg)
-{
-  if (arg->i < 0 || arg->i >= LENGTH(viewmemory)) return;
-
-  uint64_t newtags = viewmemory[arg->i].tags;
-  if (!newtags) return;
-
-  selmon->last_memorized = arg->i;
-  selmon->last_toggled_tags = selmon->tags ^ newtags;
-  selmon->tags = newtags;
-
-  validate_spawntags();
-  focus_1st_visible(newtags);
-
-  selmon->lt[selmon->sellt] = viewmemory[arg->i].layout;
-  strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
-
-  selmon->nmaster = viewmemory[arg->i].nmaster;
-  selmon->mfact = viewmemory[arg->i].mfact;
-
-  arrange(selmon);
-}
-
 Monitor *
 recttomon(int x, int y, int w, int h)
 {
@@ -1856,11 +1831,11 @@ resizemouse(const Arg *arg)
 			if (c->mon->wx + nw >= selmon->wx && c->mon->wx + nw <= selmon->wx + selmon->ww
 			&& c->mon->wy + nh >= selmon->wy && c->mon->wy + nh <= selmon->wy + selmon->wh)
 			{
-				if (!c->isfloating && selmon->lt[selmon->sellt]->arrange
+				if (!c->isfloating && WORKSPACE(selmon)->layout->arrange
 				&& (abs(nw - c->w) > snap || abs(nh - c->h) > snap))
 					togglefloating(NULL);
 			}
-			if (!selmon->lt[selmon->sellt]->arrange || c->isfloating)
+			if (!WORKSPACE(selmon)->layout->arrange || c->isfloating)
 				resize(c, c->x, c->y, nw, nh, 1);
 			break;
 		}
@@ -1885,9 +1860,9 @@ restack(Monitor *m)
 	drawbar(m);
 	if (!m->sel)
 		return;
-	if (m->sel->isfloating || !m->lt[m->sellt]->arrange)
+	if (m->sel->isfloating || !WORKSPACE(m)->layout->arrange)
 		XRaiseWindow(dpy, m->sel->win);
-	if (m->lt[m->sellt]->arrange) {
+	if (WORKSPACE(m)->layout->arrange) {
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
 		for (c = m->stack; c; c = c->snext)
@@ -1983,7 +1958,7 @@ sendmon(Client *c, Monitor *m)
 	detach(c);
 	detachstack(c);
 	c->mon = m;
-	c->tags = m->tags;
+	c->tags = WORKSPACE(m)->tags;
 	attach(c);
 	attachstack(c);
 	focus(NULL);
@@ -2067,14 +2042,12 @@ setfullscreen(Client *c, int fullscreen)
 void
 setlayout(const Arg *arg)
 {
-  if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
-    selmon->sellt ^= 1;
-  if (arg && arg->v)
-    selmon->lt[selmon->sellt] = (Layout *)arg->v;
-  strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
-  if (viewmemory[selmon->last_memorized].layout != selmon->lt[selmon->sellt]) {
-    selmon->last_memorized = -1;
-  }
+  Workspace *ws = WORKSPACE(selmon);
+  if (!arg || !arg->v || arg->v == ws->layout) return;
+
+  ws->layout = (Layout *)arg->v;
+  strncpy(selmon->ltsymbol, ws->layout->symbol, sizeof selmon->ltsymbol);
+
   if (selmon->sel)
     arrange(selmon);
   else
@@ -2086,13 +2059,13 @@ setmfact(const Arg *arg)
 {
 	float f;
 
-	if (!arg || !selmon->lt[selmon->sellt]->arrange)
+	if (!arg || !WORKSPACE(selmon)->layout->arrange)
 		return;
-	f = arg->f < 1.0 ? arg->f + selmon->mfact : arg->f - 1.0;
+	Workspace *ws = WORKSPACE(selmon);
+	f = arg->f < 1.0 ? arg->f + ws->mfact : arg->f - 1.0;
 	if (f < 0.05 || f > 0.95)
 		return;
-	selmon->mfact = f;
-	selmon->last_memorized = -1;
+	ws->mfact = f;
 	arrange(selmon);
 }
 
@@ -2189,6 +2162,33 @@ seturgent(Client *c, int urg)
 }
 
 void
+setworkspace(size_t i, int copy)
+{
+  if (i >= LENGTH(workspaces) || i == selmon->ws_idx)
+    return;
+
+  const Workspace *from = WORKSPACE(selmon);
+  selmon->last_ws_idx = selmon->ws_idx;
+  selmon->ws_idx = i;
+  Workspace *to = WORKSPACE(selmon);
+  if (copy) {
+    to->tags = from->tags;
+    to->layout = from->layout;
+    to->mfact = from->mfact;
+    to->nmaster = from->nmaster;
+    to->last_toggled_tags = from->last_toggled_tags;
+    to->spawn_tags = from->spawn_tags;
+  }
+
+  validate_spawntags();
+  focus_1st_visible(to->tags);
+
+  strncpy(selmon->ltsymbol, to->layout->symbol, sizeof selmon->ltsymbol);
+
+  arrange(selmon);
+}
+
+void
 showhide(Client *c)
 {
 	if (!c)
@@ -2196,7 +2196,7 @@ showhide(Client *c)
 	if (ISVISIBLE(c)) {
 		/* show clients top down */
 		XMoveWindow(dpy, c->win, c->x, c->y);
-		if ((!c->mon->lt[c->mon->sellt]->arrange || c->isfloating) && !c->isfullscreen)
+		if ((!WORKSPACE(c->mon)->layout->arrange || c->isfloating) && !c->isfullscreen)
 			resize(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
@@ -2263,6 +2263,14 @@ spawn(const Arg *arg)
 }
 
 void
+switchworkspace(const Arg *arg)
+{
+  if (!arg) return;
+
+  setworkspace(arg->i < 0 ? selmon->last_ws_idx : arg->i, 0);
+}
+
+void
 tag(const Arg *arg)
 {
   if (!selmon->sel) return;
@@ -2284,13 +2292,14 @@ tile(Monitor *m, int right)
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  if (n > m->nmaster)
-    mw = m->nmaster ? m->ww * m->mfact : 0;
+  const Workspace *ws = WORKSPACE(m);
+  if (n > ws->nmaster)
+    mw = ws->nmaster ? m->ww * ws->mfact : 0;
   else
     mw = m->ww;
   for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
-    if (i < m->nmaster) {
-      h = (m->wh - my) / (MIN(n, m->nmaster) - i);
+    if (i < ws->nmaster) {
+      h = (m->wh - my) / (MIN(n, ws->nmaster) - i);
       if (right)
 	resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
       else
@@ -2361,16 +2370,16 @@ toggletag(const Arg *arg)
 void
 toggleview(const Arg *arg)
 {
+  Workspace *ws = WORKSPACE(selmon);
   uint64_t arg_tag = (arg->ui == 0) ?
-    selmon->last_toggled_tags : arg->ui & TAGMASK;
+    ws->last_toggled_tags : arg->ui & TAGMASK;
   if (!arg_tag) return;
 
-  uint64_t newtags = selmon->tags ^ arg_tag;
+  uint64_t newtags = ws->tags ^ arg_tag;
   if (!newtags) return;
 
-  selmon->tags = newtags;
-  selmon->last_toggled_tags = arg_tag;
-  selmon->last_memorized = -1;
+  ws->tags = newtags;
+  ws->last_toggled_tags = arg_tag;
   uint64_t added = newtags & arg_tag;
 
   if (arg->i < 0 || !added) {
@@ -2379,7 +2388,7 @@ toggleview(const Arg *arg)
       focus_1st_visible(newtags);
     }
   } else {
-    selmon->spawn_tags = arg_tag & -arg_tag;
+    ws->spawn_tags = arg_tag & -arg_tag;
     focus_1st_visible(added);
   }
 
@@ -2674,9 +2683,10 @@ updatewmhints(Client *c)
 void
 validate_spawntags(void)
 {
-  if (selmon->spawn_tags & selmon->tags) return;
+  Workspace *ws = WORKSPACE(selmon);
+  if (ws->spawn_tags & WORKSPACE(selmon)->tags) return;
 
-  selmon->spawn_tags = 0;
+  ws->spawn_tags = 0;
 }
 
 void
@@ -2685,12 +2695,12 @@ view(const Arg *arg)
   uint64_t arg_tag = arg->ui & TAGMASK;
   if (!arg_tag) return;
 
-  if (selmon->tags == arg_tag) return;
+  Workspace *ws = WORKSPACE(selmon);
+  if (ws->tags == arg_tag) return;
 
-  selmon->last_toggled_tags = selmon->tags ^ arg_tag;
-  selmon->tags = arg_tag;
-  selmon->spawn_tags = arg_tag;
-  selmon->last_memorized = -1;
+  ws->last_toggled_tags = ws->tags ^ arg_tag;
+  ws->tags = arg_tag;
+  ws->spawn_tags = arg_tag;
 
   focus(NULL);
   arrange(selmon);
@@ -2704,12 +2714,13 @@ viewclients(const Arg *arg)
     newtags |= c->tags;
   }
   if (!newtags) return;
-  if (selmon->tags == newtags) return;
 
-  selmon->last_toggled_tags = selmon->tags ^ newtags;
-  selmon->tags = newtags;
+  Workspace *ws = WORKSPACE(selmon);
+  if (ws->tags == newtags) return;
+
+  ws->last_toggled_tags = ws->tags ^ newtags;
+  ws->tags = newtags;
   validate_spawntags();
-  selmon->last_memorized = -1;
 
   focus_1st_visible(newtags);
   arrange(selmon);
@@ -2787,7 +2798,7 @@ zoom(const Arg *arg)
   Client *c = selmon->sel;
   if (!c || c->isfloating) return;
 
-  if (!selmon->lt[selmon->sellt]->arrange)
+  if (!WORKSPACE(selmon)->layout->arrange)
     return;
   if (c == nexttiled(selmon->clients) && !(c = nexttiled(c->next)))
     return;

@@ -56,9 +56,9 @@ static const char *tags[] = {
 };
 
 /* tagging */
-static const char *memorytags[] = {
-  "Esc",
+static const char *workspaces[] = {
   "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=",
+  "Esc",
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
 };
 
@@ -96,9 +96,9 @@ static const Layout layouts[] = {
   { MODKEY|ControlMask,           KEY, view,           {.ui = 1ULL << TAG} }, \
   { MODKEY|ShiftMask,             KEY, tag,            {.ui = 1ULL << TAG} }
 
-#define VIEWMEMORYKEYS(KEY,TAG) \
-  { MODKEY,                       KEY, recallviews,    {.i = TAG} }, \
-  { MODKEY|ShiftMask,             KEY, memorizeviews,  {.i = TAG} }
+#define WORKSPACEKEYS(KEY,TAG) \
+  { MODKEY,                       KEY, switchworkspace, {.i = TAG} }, \
+  { MODKEY|ShiftMask,             KEY, copyworkspace,   {.i = TAG} }
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -127,6 +127,7 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.v = &layouts[5]} },
   { MODKEY,                       XK_Tab,          toggleview,      {.ui = 0 } },
   { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
+  { MODKEY|ControlMask,           XK_Tab,          switchworkspace, {.i = -1 } },
   { MODKEY|AltMask,               XK_Tab,          togglebar,       {0} },
   { MODKEY,                       XK_h,            setmfact,        {.f = -0.05 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
@@ -188,37 +189,31 @@ static Key keys[] = {
   TAGKEYS(                        XK_comma,                         28),
   TAGKEYS(                        XK_period,                        29),
   TAGKEYS(                        XK_slash,                         30),
-  VIEWMEMORYKEYS(                 XK_1,                              0),
-  VIEWMEMORYKEYS(                 XK_2,                              1),
-  VIEWMEMORYKEYS(                 XK_3,                              2),
-  VIEWMEMORYKEYS(                 XK_4,                              3),
-  VIEWMEMORYKEYS(                 XK_5,                              4),
-  VIEWMEMORYKEYS(                 XK_6,                              5),
-  VIEWMEMORYKEYS(                 XK_7,                              6),
-  VIEWMEMORYKEYS(                 XK_8,                              7),
-  VIEWMEMORYKEYS(                 XK_9,                              8),
-  VIEWMEMORYKEYS(                 XK_0,                              9),
-  VIEWMEMORYKEYS(                 XK_minus,                         10),
-  VIEWMEMORYKEYS(                 XK_equal,                         11),
-  VIEWMEMORYKEYS(                 XK_u,                             12),
-  VIEWMEMORYKEYS(                 XK_i,                             13),
-  VIEWMEMORYKEYS(                 XK_g,                             14),
-  VIEWMEMORYKEYS(                 XK_b,                             15),
-  VIEWMEMORYKEYS(                 XK_n,                             16),
-  VIEWMEMORYKEYS(                 XK_m,                             17),
-  VIEWMEMORYKEYS(                 XK_Escape,                        18),
-  VIEWMEMORYKEYS(                 XK_F1,                            19),
-  VIEWMEMORYKEYS(                 XK_F2,                            20),
-  VIEWMEMORYKEYS(                 XK_F3,                            21),
-  VIEWMEMORYKEYS(                 XK_F4,                            22),
-  VIEWMEMORYKEYS(                 XK_F5,                            23),
-  VIEWMEMORYKEYS(                 XK_F6,                            24),
-  VIEWMEMORYKEYS(                 XK_F7,                            25),
-  VIEWMEMORYKEYS(                 XK_F8,                            26),
-  VIEWMEMORYKEYS(                 XK_F9,                            27),
-  VIEWMEMORYKEYS(                 XK_F10,                           28),
-  VIEWMEMORYKEYS(                 XK_F11,                           29),
-  VIEWMEMORYKEYS(                 XK_F12,                           30),
+  WORKSPACEKEYS(                  XK_1,                              0),
+  WORKSPACEKEYS(                  XK_2,                              1),
+  WORKSPACEKEYS(                  XK_3,                              2),
+  WORKSPACEKEYS(                  XK_4,                              3),
+  WORKSPACEKEYS(                  XK_5,                              4),
+  WORKSPACEKEYS(                  XK_6,                              5),
+  WORKSPACEKEYS(                  XK_7,                              6),
+  WORKSPACEKEYS(                  XK_8,                              7),
+  WORKSPACEKEYS(                  XK_9,                              8),
+  WORKSPACEKEYS(                  XK_0,                              9),
+  WORKSPACEKEYS(                  XK_minus,                         10),
+  WORKSPACEKEYS(                  XK_equal,                         11),
+  WORKSPACEKEYS(                  XK_Escape,                        12),
+  WORKSPACEKEYS(                  XK_F1,                            13),
+  WORKSPACEKEYS(                  XK_F2,                            14),
+  WORKSPACEKEYS(                  XK_F3,                            15),
+  WORKSPACEKEYS(                  XK_F4,                            16),
+  WORKSPACEKEYS(                  XK_F5,                            17),
+  WORKSPACEKEYS(                  XK_F6,                            18),
+  WORKSPACEKEYS(                  XK_F7,                            19),
+  WORKSPACEKEYS(                  XK_F8,                            20),
+  WORKSPACEKEYS(                  XK_F9,                            21),
+  WORKSPACEKEYS(                  XK_F10,                           22),
+  WORKSPACEKEYS(                  XK_F11,                           23),
+  WORKSPACEKEYS(                  XK_F12,                           24),
 };
 
 /* button definitions */
