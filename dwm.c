@@ -160,7 +160,6 @@ static void clientmessage(XEvent *e);
 static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
-static void copyworkspace(const Arg *arg);
 static Monitor *createmon(void);
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
@@ -222,7 +221,6 @@ static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
-static void setworkspace(size_t i, int copy);
 static void showhide(Client *c);
 static void snapandcenter_x(const Arg *arg);
 static void snapandcenter_y(const Arg *arg);
@@ -248,8 +246,6 @@ static void updatestatus(void);
 static void updatetitle(Client *c);
 static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
-void validate_spawntags(void);
-static void view(const Arg *arg);
 static void viewclients(const Arg *arg);
 static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
@@ -695,14 +691,6 @@ createmon(void)
 	m->topbar = topbar;
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	return m;
-}
-
-void
-copyworkspace(const Arg *arg)
-{
-  if (!arg) return;
-
-  setworkspace(arg->i < 0 ? selmon->last_ws_idx : arg->i, 1);
 }
 
 void
@@ -2156,29 +2144,6 @@ seturgent(Client *c, int urg)
 }
 
 void
-setworkspace(size_t i, int copy)
-{
-  if (i >= LENGTH(tags) || i == selmon->ws_idx)
-    return;
-
-  const Workspace *from = WORKSPACE(selmon);
-  selmon->last_ws_idx = selmon->ws_idx;
-  selmon->ws_idx = i;
-  Workspace *to = WORKSPACE(selmon);
-  if (copy) {
-    to->tags = from->tags;
-    to->layout = from->layout;
-    to->mfact = from->mfact;
-    to->nmaster = from->nmaster;
-    to->last_toggled_tags = from->last_toggled_tags;
-  }
-
-  focus_1st_visible(to->tags);
-  strncpy(selmon->ltsymbol, to->layout->symbol, sizeof selmon->ltsymbol);
-  arrange(selmon);
-}
-
-void
 showhide(Client *c)
 {
 	if (!c)
@@ -2256,8 +2221,18 @@ void
 switchworkspace(const Arg *arg)
 {
   if (!arg) return;
+  int i = arg->i < 0 ? selmon->last_ws_idx : arg->i;
 
-  setworkspace(arg->i < 0 ? selmon->last_ws_idx : arg->i, 0);
+  if (i >= LENGTH(tags) || i == selmon->ws_idx)
+    return;
+
+  selmon->last_ws_idx = selmon->ws_idx;
+  selmon->ws_idx = i;
+  Workspace *ws = WORKSPACE(selmon);
+
+  focus_1st_visible(ws->tags);
+  strncpy(selmon->ltsymbol, ws->layout->symbol, sizeof selmon->ltsymbol);
+  arrange(selmon);
 }
 
 void
@@ -2340,21 +2315,6 @@ togglefloating(const Arg *arg)
 		resize(selmon->sel, selmon->sel->x, selmon->sel->y,
 			selmon->sel->w, selmon->sel->h, 0);
 	arrange(selmon);
-}
-
-void
-toggletag(const Arg *arg)
-{
-	unsigned int newtags;
-
-	if (!selmon->sel)
-		return;
-	newtags = selmon->sel->tags ^ (arg->ui & TAGMASK);
-	if (newtags) {
-		selmon->sel->tags = newtags;
-		focus(NULL);
-		arrange(selmon);
-	}
 }
 
 void
@@ -2666,22 +2626,6 @@ updatewmhints(Client *c)
 			c->neverfocus = 0;
 		XFree(wmh);
 	}
-}
-
-void
-view(const Arg *arg)
-{
-  uint64_t arg_tag = arg->ui & TAGMASK;
-  if (!arg_tag) return;
-
-  Workspace *ws = WORKSPACE(selmon);
-  if (ws->tags == arg_tag) return;
-
-  ws->last_toggled_tags = ws->tags ^ arg_tag;
-  ws->tags = arg_tag;
-
-  focus(NULL);
-  arrange(selmon);
 }
 
 void
