@@ -2210,7 +2210,7 @@ void
 snapandcenter_x(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (!c || !c->floating) return;
+  if (!c || !c->isfloating) return;
 
   int x;
   if (arg->i < 0) {
@@ -2227,7 +2227,7 @@ void
 snapandcenter_y(const Arg *arg)
 {
   Client *c = selmon->sel;
-  if (!c || !c->floating) return;
+  if (!c || !c->isfloating) return;
 
   int x = (selmon->ww - c->w) / 2;
   int y;
