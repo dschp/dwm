@@ -128,6 +128,8 @@ typedef struct {
 typedef struct {
   uint64_t tags;
   const Layout *layout;
+  float mfact;
+  int nmaster;
 } Memory;
 
 struct Monitor {
@@ -140,6 +142,7 @@ struct Monitor {
   int wx, wy, ww, wh;   /* window area  */
   uint64_t tags;
   uint64_t last_toggled_tags;
+  uint64_t spawn_tags;
   int last_memorized;
   int showbar;
   int topbar;
@@ -265,6 +268,7 @@ static void updatestatus(void);
 static void updatetitle(Client *c);
 static void updatewindowtype(Client *c);
 static void updatewmhints(Client *c);
+void validate_spawntags(void);
 static void view(const Arg *arg);
 static void viewclients(const Arg *arg);
 static Client *wintoclient(Window w);
@@ -349,7 +353,14 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : 1;
+	if (!(c->tags & TAGMASK)) {
+	  if (c->mon->spawn_tags)
+	    c->tags = c->mon->spawn_tags;
+	  else if (c->mon->sel)
+	    c->tags = c->mon->sel->tags;
+	  else
+	    c->tags = c->mon->tags & -(c->mon->tags);
+	}
 }
 
 int
@@ -683,6 +694,7 @@ createmon(void)
 	m->lt[0] = &layouts[0];
 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
+	m->spawn_tags = 0;
 	m->last_memorized = -1;
 	return m;
 }
@@ -1256,6 +1268,7 @@ void
 incnmaster(const Arg *arg)
 {
 	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
+	selmon->last_memorized = -1;
 	arrange(selmon);
 }
 
@@ -1432,6 +1445,8 @@ memorizeviews(const Arg *arg)
   selmon->last_memorized = arg->i;
   viewmemory[arg->i].tags = selmon->tags;
   viewmemory[arg->i].layout = selmon->lt[selmon->sellt];
+  viewmemory[arg->i].nmaster = selmon->nmaster;
+  viewmemory[arg->i].mfact = selmon->mfact;
 
   drawbar(selmon);
 }
@@ -1754,10 +1769,15 @@ recallviews(const Arg *arg)
   selmon->last_memorized = arg->i;
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
+
+  validate_spawntags();
   focus_1st_visible(newtags);
 
   selmon->lt[selmon->sellt] = viewmemory[arg->i].layout;
   strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
+
+  selmon->nmaster = viewmemory[arg->i].nmaster;
+  selmon->mfact = viewmemory[arg->i].mfact;
 
   arrange(selmon);
 }
@@ -2052,10 +2072,8 @@ setlayout(const Arg *arg)
   if (arg && arg->v)
     selmon->lt[selmon->sellt] = (Layout *)arg->v;
   strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
-  if (selmon->last_memorized >=0) {
-    if (viewmemory[selmon->last_memorized].layout != selmon->lt[selmon->sellt]) {
-      selmon->last_memorized = -1;
-    }
+  if (viewmemory[selmon->last_memorized].layout != selmon->lt[selmon->sellt]) {
+    selmon->last_memorized = -1;
   }
   if (selmon->sel)
     arrange(selmon);
@@ -2074,6 +2092,7 @@ setmfact(const Arg *arg)
 	if (f < 0.05 || f > 0.95)
 		return;
 	selmon->mfact = f;
+	selmon->last_memorized = -1;
 	arrange(selmon);
 }
 
@@ -2355,10 +2374,12 @@ toggleview(const Arg *arg)
   uint64_t added = newtags & arg_tag;
 
   if (arg->i < 0 || !added) {
-    if (selmon->sel && !(selmon->sel->tags & newtags)) {
+    validate_spawntags();
+    if (selmon->sel && !ISVISIBLE(selmon->sel)) {
       focus_1st_visible(newtags);
     }
   } else {
+    selmon->spawn_tags = arg_tag & -arg_tag;
     focus_1st_visible(added);
   }
 
@@ -2651,16 +2672,24 @@ updatewmhints(Client *c)
 }
 
 void
+validate_spawntags(void)
+{
+  if (selmon->spawn_tags & selmon->tags) return;
+
+  selmon->spawn_tags = 0;
+}
+
+void
 view(const Arg *arg)
 {
   uint64_t arg_tag = arg->ui & TAGMASK;
   if (!arg_tag) return;
 
-  arg_tag |= 1;
   if (selmon->tags == arg_tag) return;
 
   selmon->last_toggled_tags = selmon->tags ^ arg_tag;
   selmon->tags = arg_tag;
+  selmon->spawn_tags = arg_tag;
   selmon->last_memorized = -1;
 
   focus(NULL);
@@ -2670,17 +2699,18 @@ view(const Arg *arg)
 void
 viewclients(const Arg *arg)
 {
-  uint64_t newtags = 1;
+  uint64_t newtags = 0;
   for (Client *c = selmon->clients; c; c = c->next) {
     newtags |= c->tags;
   }
   if (!newtags) return;
   if (selmon->tags == newtags) return;
 
-
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
+  validate_spawntags();
   selmon->last_memorized = -1;
+
   focus_1st_visible(newtags);
   arrange(selmon);
 }
