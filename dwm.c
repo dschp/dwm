@@ -135,6 +135,7 @@ struct Monitor {
   int wx, wy, ww, wh;   /* window area  */
   uint64_t tags;
   uint64_t last_toggled_tags;
+  int last_memorized;
   int showbar;
   int topbar;
   Client *clients;
@@ -203,6 +204,7 @@ static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void maximize(const Arg *arg);
+static void memorizeviews(const Arg *arg);
 static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
@@ -217,6 +219,7 @@ static Client *nexttiled(Client *c);
 static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
+static void recallviews(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
@@ -302,6 +305,8 @@ static struct timespec ts_last_drawbar;
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
+
+static uint64_t viewsets[LENGTH(tagmemory)];
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 63 ? -1 : 1]; };
@@ -673,6 +678,7 @@ createmon(void)
 	m->lt[0] = &layouts[0];
 	m->lt[1] = &layouts[1 % LENGTH(layouts)];
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
+	m->last_memorized = -1;
 	return m;
 }
 
@@ -814,6 +820,14 @@ drawbar(Monitor *m)
     drw_setscheme(drw, scheme[SchemeValue2]);
     drw_text(drw, x, 0, w, bh, 0, buf, 0);
     x += w;
+
+    if (selmon->last_memorized >=0) {
+      snprintf(buf, sizeof(buf), "%s", tagmemory[m->last_memorized]);
+      w = TEXTW_(buf) + lrpad / 2;
+      drw_setscheme(drw, scheme[SchemeValue3]);
+      drw_text(drw, x, 0, w, bh, 0, buf, 0);
+      x += w;
+    }
   }
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
@@ -1406,6 +1420,17 @@ maximize(const Arg *arg)
 }
 
 void
+memorizeviews(const Arg *arg)
+{
+  if (arg->i < 0 || arg->i >= LENGTH(viewsets)) return;
+
+  selmon->last_memorized = arg->i;
+  viewsets[arg->i] = selmon->tags;
+
+  drawbar(selmon);
+}
+
+void
 monocle(Monitor *m)
 {
   for (Client *c = nexttiled(m->clients); c; c = nexttiled(c->next))
@@ -1708,6 +1733,21 @@ void
 quit(const Arg *arg)
 {
 	running = 0;
+}
+
+void
+recallviews(const Arg *arg)
+{
+  if (arg->i < 0 || arg->i >= LENGTH(viewsets)) return;
+
+  uint64_t newtags = viewsets[arg->i];
+  if (!newtags) return;
+
+  selmon->last_memorized = arg->i;
+  selmon->last_toggled_tags = selmon->tags ^ newtags;
+  selmon->tags = newtags;
+  focus_1st_visible(newtags);
+  arrange(selmon);
 }
 
 Monitor *
@@ -2294,6 +2334,7 @@ toggleview(const Arg *arg)
 
   selmon->tags = newtags;
   selmon->last_toggled_tags = arg_tag;
+  selmon->last_memorized = -1;
   uint64_t added = newtags & arg_tag;
 
   if (arg->i < 0 || !added) {
@@ -2618,8 +2659,10 @@ viewclients(const Arg *arg)
   if (!newtags) return;
   if (selmon->tags == newtags) return;
 
+
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
+  selmon->last_memorized = -1;
   focus_1st_visible(newtags);
   arrange(selmon);
 }
