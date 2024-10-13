@@ -1009,7 +1009,7 @@ focus_1st_visible(uint64_t tags)
     return;
   }
 
-  if (selmon->sel && !(selmon->sel->tags & tags)) {
+  if (selmon->sel && !ISVISIBLE(selmon->sel)) {
     unfocus(selmon->sel, 0);
     selmon->sel = NULL;
   }
