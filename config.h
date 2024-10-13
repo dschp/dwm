@@ -50,14 +50,10 @@ static const char *colors[][3]      = {
 /* tagging */
 static const char *tags[] = {
   "~",
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=",
   "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\",
   "A", "S", "D", "F", "G", ";", "'",
-  "Z", "X", "C", "B", "N", "M", "V", "<", ">", "/",
-};
-
-/* tagging */
-static const char *workspaces[] = {
-  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=",
+  "Z", "X", "C", "V", "B", "N", "M", "<", ">", "/",
   "Esc",
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
 };
@@ -89,16 +85,12 @@ static const Layout layouts[] = {
 
 /* key definitions */
 #define AltMask Mod1Mask
-#define AllMask AltMask|ShiftMask|ControlMask
+#define ASCMask AltMask|ShiftMask|ControlMask
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
-  { MODKEY,                       KEY, toggleview,     {.ui = 1ULL << TAG} }, \
-  { MODKEY|ControlMask,           KEY, view,           {.ui = 1ULL << TAG} }, \
-  { MODKEY|ShiftMask,             KEY, tag,            {.ui = 1ULL << TAG} }
-
-#define WORKSPACEKEYS(KEY,TAG) \
-  { MODKEY,                       KEY, switchworkspace, {.i = TAG} }, \
-  { MODKEY|ShiftMask,             KEY, copyworkspace,   {.i = TAG} }
+  { MODKEY,                       KEY, toggleview,      {.ui = 1ULL << TAG} }, \
+  { MODKEY|ShiftMask,             KEY, tag,             {.ui = 1ULL << TAG} }, \
+  { MODKEY|ControlMask,           KEY, switchworkspace, {.i = TAG} }
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -115,7 +107,7 @@ static const char *termcmd[]  = { "st", NULL };
 
 static Key keys[] = {
   /* modifier                     key              function         argument */
-  { MODKEY|AllMask,               XK_BackSpace,    quit,            {0} },
+  { MODKEY|ASCMask,               XK_BackSpace,    quit,            {0} },
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
@@ -159,61 +151,61 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_space,        togglefloating,  {0} },
   { MODKEY|ShiftMask,             XK_space,        centerwindow,    {0} },
   TAGKEYS(                        XK_grave,                          0),
-  TAGKEYS(                        XK_q,                              1),
-  TAGKEYS(                        XK_w,                              2),
-  TAGKEYS(                        XK_e,                              3),
-  TAGKEYS(                        XK_r,                              4),
-  TAGKEYS(                        XK_t,                              5),
-  TAGKEYS(                        XK_y,                              6),
-  TAGKEYS(                        XK_u,                              7),
-  TAGKEYS(                        XK_i,                              8),
-  TAGKEYS(                        XK_o,                              9),
-  TAGKEYS(                        XK_p,                             10),
-  TAGKEYS(                        XK_bracketleft,                   11),
-  TAGKEYS(                        XK_bracketright,                  12),
-  TAGKEYS(                        XK_backslash,                     13),
-  TAGKEYS(                        XK_a,                             14),
-  TAGKEYS(                        XK_s,                             15),
-  TAGKEYS(                        XK_d,                             16),
-  TAGKEYS(                        XK_f,                             17),
-  TAGKEYS(                        XK_g,                             18),
-  TAGKEYS(                        XK_semicolon,                     19),
-  TAGKEYS(                        XK_apostrophe,                    20),
-  TAGKEYS(                        XK_z,                             21),
-  TAGKEYS(                        XK_x,                             22),
-  TAGKEYS(                        XK_c,                             23),
-  TAGKEYS(                        XK_v,                             24),
-  TAGKEYS(                        XK_b,                             25),
-  TAGKEYS(                        XK_n,                             26),
-  TAGKEYS(                        XK_m,                             27),
-  TAGKEYS(                        XK_comma,                         28),
-  TAGKEYS(                        XK_period,                        29),
-  TAGKEYS(                        XK_slash,                         30),
-  WORKSPACEKEYS(                  XK_1,                              0),
-  WORKSPACEKEYS(                  XK_2,                              1),
-  WORKSPACEKEYS(                  XK_3,                              2),
-  WORKSPACEKEYS(                  XK_4,                              3),
-  WORKSPACEKEYS(                  XK_5,                              4),
-  WORKSPACEKEYS(                  XK_6,                              5),
-  WORKSPACEKEYS(                  XK_7,                              6),
-  WORKSPACEKEYS(                  XK_8,                              7),
-  WORKSPACEKEYS(                  XK_9,                              8),
-  WORKSPACEKEYS(                  XK_0,                              9),
-  WORKSPACEKEYS(                  XK_minus,                         10),
-  WORKSPACEKEYS(                  XK_equal,                         11),
-  WORKSPACEKEYS(                  XK_Escape,                        12),
-  WORKSPACEKEYS(                  XK_F1,                            13),
-  WORKSPACEKEYS(                  XK_F2,                            14),
-  WORKSPACEKEYS(                  XK_F3,                            15),
-  WORKSPACEKEYS(                  XK_F4,                            16),
-  WORKSPACEKEYS(                  XK_F5,                            17),
-  WORKSPACEKEYS(                  XK_F6,                            18),
-  WORKSPACEKEYS(                  XK_F7,                            19),
-  WORKSPACEKEYS(                  XK_F8,                            20),
-  WORKSPACEKEYS(                  XK_F9,                            21),
-  WORKSPACEKEYS(                  XK_F10,                           22),
-  WORKSPACEKEYS(                  XK_F11,                           23),
-  WORKSPACEKEYS(                  XK_F12,                           24),
+  TAGKEYS(                        XK_1,                              1),
+  TAGKEYS(                        XK_2,                              2),
+  TAGKEYS(                        XK_3,                              3),
+  TAGKEYS(                        XK_4,                              4),
+  TAGKEYS(                        XK_5,                              5),
+  TAGKEYS(                        XK_6,                              6),
+  TAGKEYS(                        XK_7,                              7),
+  TAGKEYS(                        XK_8,                              8),
+  TAGKEYS(                        XK_9,                              9),
+  TAGKEYS(                        XK_0,                             10),
+  TAGKEYS(                        XK_minus,                         11),
+  TAGKEYS(                        XK_equal,                         12),
+  TAGKEYS(                        XK_q,                             13),
+  TAGKEYS(                        XK_w,                             14),
+  TAGKEYS(                        XK_e,                             15),
+  TAGKEYS(                        XK_r,                             16),
+  TAGKEYS(                        XK_t,                             17),
+  TAGKEYS(                        XK_y,                             18),
+  TAGKEYS(                        XK_u,                             19),
+  TAGKEYS(                        XK_i,                             20),
+  TAGKEYS(                        XK_o,                             21),
+  TAGKEYS(                        XK_p,                             22),
+  TAGKEYS(                        XK_bracketleft,                   23),
+  TAGKEYS(                        XK_bracketright,                  24),
+  TAGKEYS(                        XK_backslash,                     25),
+  TAGKEYS(                        XK_a,                             26),
+  TAGKEYS(                        XK_s,                             27),
+  TAGKEYS(                        XK_d,                             28),
+  TAGKEYS(                        XK_f,                             29),
+  TAGKEYS(                        XK_g,                             30),
+  TAGKEYS(                        XK_semicolon,                     31),
+  TAGKEYS(                        XK_apostrophe,                    32),
+  TAGKEYS(                        XK_z,                             33),
+  TAGKEYS(                        XK_x,                             34),
+  TAGKEYS(                        XK_c,                             35),
+  TAGKEYS(                        XK_v,                             36),
+  TAGKEYS(                        XK_b,                             37),
+  TAGKEYS(                        XK_n,                             38),
+  TAGKEYS(                        XK_m,                             39),
+  TAGKEYS(                        XK_comma,                         40),
+  TAGKEYS(                        XK_period,                        41),
+  TAGKEYS(                        XK_slash,                         42),
+  TAGKEYS(                        XK_Escape,                        43),
+  TAGKEYS(                        XK_F1,                            44),
+  TAGKEYS(                        XK_F2,                            45),
+  TAGKEYS(                        XK_F3,                            46),
+  TAGKEYS(                        XK_F4,                            47),
+  TAGKEYS(                        XK_F5,                            48),
+  TAGKEYS(                        XK_F6,                            49),
+  TAGKEYS(                        XK_F7,                            50),
+  TAGKEYS(                        XK_F8,                            51),
+  TAGKEYS(                        XK_F9,                            52),
+  TAGKEYS(                        XK_F10,                           53),
+  TAGKEYS(                        XK_F11,                           54),
+  TAGKEYS(                        XK_F12,                           55),
 };
 
 /* button definitions */

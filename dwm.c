@@ -136,12 +136,12 @@ typedef struct {
 } Rule;
 
 typedef struct {
+  uint64_t own_tag;
   uint64_t tags;
   const Layout *layout;
   float mfact;
   int nmaster;
   uint64_t last_toggled_tags;
-  uint64_t spawn_tags;
 } Workspace;
 
 /* function declarations */
@@ -299,7 +299,7 @@ struct Monitor {
   char ltsymbol[16];
   uint8_t ws_idx;
   uint8_t last_ws_idx;
-  Workspace workspaces[LENGTH(workspaces)];
+  Workspace workspaces[LENGTH(tags)];
   int num;
   int by;               /* bar geometry */
   int mx, my, mw, mh;   /* screen size */
@@ -351,14 +351,8 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	if (!(c->tags & TAGMASK)) {
-	  if (ws->spawn_tags)
-	    c->tags = ws->spawn_tags;
-	  else if (c->mon->sel)
-	    c->tags = c->mon->sel->tags;
-	  else
-	    c->tags = ws->tags & -(ws->tags);
-	}
+	if (!(c->tags & TAGMASK))
+		c->tags = ws->own_tag;
 }
 
 int
@@ -525,7 +519,7 @@ cleanup(void)
 	Monitor *m;
 	size_t i;
 
-	for (int i = 0; i < LENGTH(workspaces); i++)
+	for (int i = 0; i < LENGTH(tags); i++)
 		selmon->workspaces[i].tags = ~0;
 	for (m = mons; m; m = m->next) {
 		WORKSPACE(m)->layout = &foo;
@@ -689,13 +683,13 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	m->ws_idx = 0;
 	m->last_ws_idx = 0;
-	for (int i = 0; i < LENGTH(workspaces); i++) {
-	  m->workspaces[i].layout = &layouts[0];
-	  m->workspaces[i].tags = 1;
-	  m->workspaces[i].mfact = mfact;
-	  m->workspaces[i].nmaster = nmaster;
-	  m->workspaces[i].last_toggled_tags = 0;
-	  m->workspaces[i].spawn_tags = 0;
+	for (int i = 0; i < LENGTH(tags); i++) {
+	  Workspace *ws = &m->workspaces[i];
+	  ws->layout = &layouts[0];
+	  ws->own_tag = ws->tags = 1ULL << i;
+	  ws->mfact = mfact;
+	  ws->nmaster = nmaster;
+	  ws->last_toggled_tags = 0;
 	}
 	m->showbar = showbar;
 	m->topbar = topbar;
@@ -822,7 +816,7 @@ drawbar(Monitor *m)
 
   {
     char buf[32];
-    snprintf(buf, sizeof(buf), "%s", workspaces[m->ws_idx]);
+    snprintf(buf, sizeof(buf), "%s", tags[m->ws_idx]);
     w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeLayout]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 1);
@@ -2164,7 +2158,7 @@ seturgent(Client *c, int urg)
 void
 setworkspace(size_t i, int copy)
 {
-  if (i >= LENGTH(workspaces) || i == selmon->ws_idx)
+  if (i >= LENGTH(tags) || i == selmon->ws_idx)
     return;
 
   const Workspace *from = WORKSPACE(selmon);
@@ -2177,14 +2171,10 @@ setworkspace(size_t i, int copy)
     to->mfact = from->mfact;
     to->nmaster = from->nmaster;
     to->last_toggled_tags = from->last_toggled_tags;
-    to->spawn_tags = from->spawn_tags;
   }
 
-  validate_spawntags();
   focus_1st_visible(to->tags);
-
   strncpy(selmon->ltsymbol, to->layout->symbol, sizeof selmon->ltsymbol);
-
   arrange(selmon);
 }
 
@@ -2373,7 +2363,7 @@ toggleview(const Arg *arg)
   Workspace *ws = WORKSPACE(selmon);
   uint64_t arg_tag = (arg->ui == 0) ?
     ws->last_toggled_tags : arg->ui & TAGMASK;
-  if (!arg_tag) return;
+  if (!arg_tag || arg_tag & ws->own_tag) return;
 
   uint64_t newtags = ws->tags ^ arg_tag;
   if (!newtags) return;
@@ -2383,12 +2373,10 @@ toggleview(const Arg *arg)
   uint64_t added = newtags & arg_tag;
 
   if (arg->i < 0 || !added) {
-    validate_spawntags();
     if (selmon->sel && !ISVISIBLE(selmon->sel)) {
       focus_1st_visible(newtags);
     }
   } else {
-    ws->spawn_tags = arg_tag & -arg_tag;
     focus_1st_visible(added);
   }
 
@@ -2681,15 +2669,6 @@ updatewmhints(Client *c)
 }
 
 void
-validate_spawntags(void)
-{
-  Workspace *ws = WORKSPACE(selmon);
-  if (ws->spawn_tags & WORKSPACE(selmon)->tags) return;
-
-  ws->spawn_tags = 0;
-}
-
-void
 view(const Arg *arg)
 {
   uint64_t arg_tag = arg->ui & TAGMASK;
@@ -2700,7 +2679,6 @@ view(const Arg *arg)
 
   ws->last_toggled_tags = ws->tags ^ arg_tag;
   ws->tags = arg_tag;
-  ws->spawn_tags = arg_tag;
 
   focus(NULL);
   arrange(selmon);
@@ -2709,18 +2687,17 @@ view(const Arg *arg)
 void
 viewclients(const Arg *arg)
 {
-  uint64_t newtags = 0;
+  Workspace *ws = WORKSPACE(selmon);
+  uint64_t newtags = ws->own_tag;
   for (Client *c = selmon->clients; c; c = c->next) {
     newtags |= c->tags;
   }
   if (!newtags) return;
 
-  Workspace *ws = WORKSPACE(selmon);
   if (ws->tags == newtags) return;
 
   ws->last_toggled_tags = ws->tags ^ newtags;
   ws->tags = newtags;
-  validate_spawntags();
 
   focus_1st_visible(newtags);
   arrange(selmon);
