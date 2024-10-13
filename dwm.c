@@ -243,7 +243,6 @@ static void tileleft(Monitor *m);
 static void tileright(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
-static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
@@ -340,7 +339,7 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : c->mon->tags;
+	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : 1;
 }
 
 int
@@ -831,19 +830,11 @@ drawbar(Monitor *m)
 		 is_urgent);
       }
 
-      if (m->sel && 1ULL << i & m->sel->tags) {
-	drw_setscheme(drw, scheme[SchemeTagged]);
-	const size_t s = 3;
-	const size_t ix = x + w / 2 - 1, iy = bh - s;
-	for (int i = 0; i < s; i++)
-	  drw_rect(drw, ix-i, iy+i, 1 + i*2, 1, 1, 0);
-      }
-
       x += w;
     }
 
     clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
- }
+  }
 
   w = m->ww - tw - x;
   if (w > bh) {
@@ -856,39 +847,35 @@ drawbar(Monitor *m)
       const int limit = m->ww - tw;
 
       c = m->clients;
-      for (int i = 0; c; c = c->next, i++) {
+      for (; c && x < limit; c = c->next) {
 	if (!ISVISIBLE(c)) continue;
 
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
 
-	const char open[] = "[";
-	w = TEXTW(open);
-	if (x + w > limit) {
-	  x = limit;
-	  break;
+	char buf[20 + sizeof(((Client){0}).name)];
+	const char *fmt = "[%s] %s";
+	size_t i = 0;
+	if (c->tags != 1) {
+	  i++;
+	  for (uint64_t t = 1 << 1; i < LENGTH(tags); i++, t <<= 1)
+	    if (t & c->tags) break;
 	}
-	drw_text(drw, x, 0, w, bh, lrpad / 2, open, c == m->sel);
+	const char *tname = tags[i];
 
-	if (c->isfloating)
-	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		   c == m->sel || c->isfixed, c == m->sel);
-	x += w;
-
-	size_t cw = MIN(TEXTW_(c->name), BAR_CLIENT_MAX_WIDTH);
-	if (x + cw > limit) cw = limit - x;
-	drw_text(drw, x, 0, cw, bh, 0, c->name, c == m->sel);
-
-	x += cw;
-
-	const char close[] = "]";
-	w = TEXTW(close);
-	if (x + w > limit) {
-	  x = limit;
-	  break;
+	if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
+	  fmt = "<%s> %s";
 	}
-	drw_text(drw, x, 0, w, bh, lrpad / 2, close, c == m->sel);
+	snprintf(buf, sizeof(buf), fmt, tname, c->name);
 
-	x += w;
+	int tag_w = MIN(TEXTW(buf), BAR_CLIENT_MAX_WIDTH);
+	if (x + tag_w > limit) tag_w = limit - x;
+
+	drw_text(drw, x, 0, tag_w, bh, lrpad / 2, buf, c == m->sel);
+ 	if (c->isfloating)
+ 	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
+ 		   c == m->sel || c->isfixed, c == m->sel);
+
+	x += tag_w;
       }
 
       if (x < limit) {
@@ -2609,8 +2596,9 @@ void
 view(const Arg *arg)
 {
   uint64_t arg_tag = arg->ui & TAGMASK;
-
   if (!arg_tag) return;
+
+  arg_tag |= 1;
   if (selmon->tags == arg_tag) return;
 
   selmon->last_toggled_tags = selmon->tags ^ arg_tag;
@@ -2623,7 +2611,7 @@ view(const Arg *arg)
 void
 viewclients(const Arg *arg)
 {
-  uint64_t newtags = 0;
+  uint64_t newtags = 1;
   for (Client *c = selmon->clients; c; c = c->next) {
     newtags |= c->tags;
   }

@@ -86,8 +86,7 @@ static const Layout layouts[] = {
 #define TAGKEYS(KEY,TAG) \
   { MODKEY,                       KEY, toggleview,     {.ui = 1ULL << TAG} }, \
   { MODKEY|ControlMask,           KEY, view,           {.ui = 1ULL << TAG} }, \
-  { MODKEY|ShiftMask,             KEY, tag,            {.ui = 1ULL << TAG} }, \
-  { MODKEY|AltMask,               KEY, toggletag,      {.ui = 1ULL << TAG} },
+  { MODKEY|ShiftMask,             KEY, tag,            {.ui = 1ULL << TAG} }
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -123,10 +122,10 @@ static Key keys[] = {
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
   { MODKEY,                       XK_k,            focusstack,      {.i = -1 } },
   { MODKEY,                       XK_l,            setmfact,        {.f = +0.05 } },
-  { MODKEY|AltMask,               XK_h,            snapandcenter_x, {.i = -1} },
-  { MODKEY|AltMask,               XK_j,            snapandcenter_y, {.i = +1} },
-  { MODKEY|AltMask,               XK_k,            snapandcenter_y, {.i = -1} },
-  { MODKEY|AltMask,               XK_l,            snapandcenter_x, {.i = +1} },
+  { MODKEY|AltMask,               XK_h,            snapandcenter_x, {.i = -1 } },
+  { MODKEY|AltMask,               XK_j,            snapandcenter_y, {.i = +1 } },
+  { MODKEY|AltMask,               XK_k,            snapandcenter_y, {.i = -1 } },
+  { MODKEY|AltMask,               XK_l,            snapandcenter_x, {.i = +1 } },
   { MODKEY|ShiftMask,             XK_h,            moveclient_x,    {.f = -0.05 } },
   { MODKEY|ShiftMask,             XK_j,            movestack,       {.i = +1 } },
   { MODKEY|ShiftMask,             XK_j,            moveclient_y,    {.f = +0.05 } },
@@ -146,49 +145,48 @@ static Key keys[] = {
   { MODKEY|ControlMask,           XK_space,        centerwindow,    {0} },
   { MODKEY|ShiftMask,             XK_space,        togglefloating,  {0} },
   { MODKEY|ShiftMask,             XK_space,        centerwindow,    {0} },
-  TAGKEYS(                        XK_grave,                         0)
-  TAGKEYS(                        XK_1,                             1)
-  TAGKEYS(                        XK_2,                             2)
-  TAGKEYS(                        XK_3,                             3)
-  TAGKEYS(                        XK_4,                             4)
-  TAGKEYS(                        XK_5,                             5)
-  TAGKEYS(                        XK_6,                             6)
-  TAGKEYS(                        XK_7,                             7)
-  TAGKEYS(                        XK_8,                             8)
-  TAGKEYS(                        XK_9,                             9)
-  TAGKEYS(                        XK_0,                             10)
-  TAGKEYS(                        XK_minus,                         11)
-  TAGKEYS(                        XK_equal,                         12)
-  TAGKEYS(                        XK_q,                             13)
-  TAGKEYS(                        XK_w,                             14)
-  TAGKEYS(                        XK_e,                             15)
-  TAGKEYS(                        XK_r,                             16)
-  TAGKEYS(                        XK_t,                             17)
-  TAGKEYS(                        XK_y,                             18)
-  TAGKEYS(                        XK_u,                             19)
-  TAGKEYS(                        XK_i,                             20)
-  TAGKEYS(                        XK_o,                             21)
-  TAGKEYS(                        XK_p,                             22)
-  TAGKEYS(                        XK_bracketleft,                   23)
-  TAGKEYS(                        XK_bracketright,                  24)
-  TAGKEYS(                        XK_backslash,                     25)
-  TAGKEYS(                        XK_a,                             26)
-  TAGKEYS(                        XK_s,                             27)
-  TAGKEYS(                        XK_d,                             28)
-  TAGKEYS(                        XK_f,                             29)
-  TAGKEYS(                        XK_g,                             30)
-  TAGKEYS(                        XK_semicolon,                     31)
-  TAGKEYS(                        XK_apostrophe,                    32)
-  TAGKEYS(                        XK_z,                             33)
-  TAGKEYS(                        XK_x,                             34)
-  TAGKEYS(                        XK_c,                             35)
-  TAGKEYS(                        XK_v,                             36)
-  TAGKEYS(                        XK_b,                             37)
-  TAGKEYS(                        XK_n,                             38)
-  TAGKEYS(                        XK_m,                             39)
-  TAGKEYS(                        XK_comma,                         40)
-  TAGKEYS(                        XK_period,                        41)
-  TAGKEYS(                        XK_slash,                         42)
+  TAGKEYS(                        XK_1,                             1),
+  TAGKEYS(                        XK_2,                             2),
+  TAGKEYS(                        XK_3,                             3),
+  TAGKEYS(                        XK_4,                             4),
+  TAGKEYS(                        XK_5,                             5),
+  TAGKEYS(                        XK_6,                             6),
+  TAGKEYS(                        XK_7,                             7),
+  TAGKEYS(                        XK_8,                             8),
+  TAGKEYS(                        XK_9,                             9),
+  TAGKEYS(                        XK_0,                             10),
+  TAGKEYS(                        XK_minus,                         11),
+  TAGKEYS(                        XK_equal,                         12),
+  TAGKEYS(                        XK_q,                             13),
+  TAGKEYS(                        XK_w,                             14),
+  TAGKEYS(                        XK_e,                             15),
+  TAGKEYS(                        XK_r,                             16),
+  TAGKEYS(                        XK_t,                             17),
+  TAGKEYS(                        XK_y,                             18),
+  TAGKEYS(                        XK_u,                             19),
+  TAGKEYS(                        XK_i,                             20),
+  TAGKEYS(                        XK_o,                             21),
+  TAGKEYS(                        XK_p,                             22),
+  TAGKEYS(                        XK_bracketleft,                   23),
+  TAGKEYS(                        XK_bracketright,                  24),
+  TAGKEYS(                        XK_backslash,                     25),
+  TAGKEYS(                        XK_a,                             26),
+  TAGKEYS(                        XK_s,                             27),
+  TAGKEYS(                        XK_d,                             28),
+  TAGKEYS(                        XK_f,                             29),
+  TAGKEYS(                        XK_g,                             30),
+  TAGKEYS(                        XK_semicolon,                     31),
+  TAGKEYS(                        XK_apostrophe,                    32),
+  TAGKEYS(                        XK_z,                             33),
+  TAGKEYS(                        XK_x,                             34),
+  TAGKEYS(                        XK_c,                             35),
+  TAGKEYS(                        XK_v,                             36),
+  TAGKEYS(                        XK_b,                             37),
+  TAGKEYS(                        XK_n,                             38),
+  TAGKEYS(                        XK_m,                             39),
+  TAGKEYS(                        XK_comma,                         40),
+  TAGKEYS(                        XK_period,                        41),
+  TAGKEYS(                        XK_slash,                         42),
 };
 
 /* button definitions */
