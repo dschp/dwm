@@ -125,6 +125,11 @@ typedef struct {
 	void (*arrange)(Monitor *);
 } Layout;
 
+typedef struct {
+  uint64_t tags;
+  const Layout *layout;
+} Memory;
+
 struct Monitor {
   char ltsymbol[16];
   float mfact;
@@ -306,7 +311,7 @@ static struct timespec ts_last_drawbar;
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
-static uint64_t viewsets[LENGTH(tagmemory)];
+static Memory viewmemory[LENGTH(memorytags)];
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 63 ? -1 : 1]; };
@@ -822,7 +827,7 @@ drawbar(Monitor *m)
     x += w;
 
     if (selmon->last_memorized >=0) {
-      snprintf(buf, sizeof(buf), "%s", tagmemory[m->last_memorized]);
+      snprintf(buf, sizeof(buf), "%s", memorytags[m->last_memorized]);
       w = TEXTW_(buf) + lrpad / 2;
       drw_setscheme(drw, scheme[SchemeValue3]);
       drw_text(drw, x, 0, w, bh, 0, buf, 0);
@@ -1422,10 +1427,11 @@ maximize(const Arg *arg)
 void
 memorizeviews(const Arg *arg)
 {
-  if (arg->i < 0 || arg->i >= LENGTH(viewsets)) return;
+  if (arg->i < 0 || arg->i >= LENGTH(viewmemory)) return;
 
   selmon->last_memorized = arg->i;
-  viewsets[arg->i] = selmon->tags;
+  viewmemory[arg->i].tags = selmon->tags;
+  viewmemory[arg->i].layout = selmon->lt[selmon->sellt];
 
   drawbar(selmon);
 }
@@ -1738,15 +1744,19 @@ quit(const Arg *arg)
 void
 recallviews(const Arg *arg)
 {
-  if (arg->i < 0 || arg->i >= LENGTH(viewsets)) return;
+  if (arg->i < 0 || arg->i >= LENGTH(viewmemory)) return;
 
-  uint64_t newtags = viewsets[arg->i];
+  uint64_t newtags = viewmemory[arg->i].tags;
   if (!newtags) return;
 
   selmon->last_memorized = arg->i;
   selmon->last_toggled_tags = selmon->tags ^ newtags;
   selmon->tags = newtags;
   focus_1st_visible(newtags);
+
+  selmon->lt[selmon->sellt] = viewmemory[arg->i].layout;
+  strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
+
   arrange(selmon);
 }
 
@@ -2035,15 +2045,20 @@ setfullscreen(Client *c, int fullscreen)
 void
 setlayout(const Arg *arg)
 {
-	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
-		selmon->sellt ^= 1;
-	if (arg && arg->v)
-		selmon->lt[selmon->sellt] = (Layout *)arg->v;
-	strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
-	if (selmon->sel)
-		arrange(selmon);
-	else
-		drawbar(selmon);
+  if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
+    selmon->sellt ^= 1;
+  if (arg && arg->v)
+    selmon->lt[selmon->sellt] = (Layout *)arg->v;
+  strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, sizeof selmon->ltsymbol);
+  if (selmon->last_memorized >=0) {
+    if (viewmemory[selmon->last_memorized].layout != selmon->lt[selmon->sellt]) {
+      selmon->last_memorized = -1;
+    }
+  }
+  if (selmon->sel)
+    arrange(selmon);
+  else
+    drawbar(selmon);
 }
 
 void
@@ -2644,6 +2659,7 @@ view(const Arg *arg)
 
   selmon->last_toggled_tags = selmon->tags ^ arg_tag;
   selmon->tags = arg_tag;
+  selmon->last_memorized = -1;
 
   focus(NULL);
   arrange(selmon);

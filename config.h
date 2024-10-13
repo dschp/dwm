@@ -56,7 +56,7 @@ static const char *tags[] = {
 };
 
 /* tagging */
-static const char *tagmemory[] = {
+static const char *memorytags[] = {
   "5", "6", "7", "8",
   "T", "Y", "U", "I",
   "G",
