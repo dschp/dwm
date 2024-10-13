@@ -32,7 +32,7 @@ static const char col_mfactor[]     = "#f32f7c";
 
 
 static const char *colors[][3]      = {
-  /*                   fg            bg         border       status */
+  /*                   fg            bg         border    status code */
   [SchemeNorm]     = { col_fg1,      col_bg2,   col_bdr2 }, /* 0x20 */
   [SchemeSel]      = { col_cyan1,    col_bg1,   col_bdr1 }, /* 0x21 */
   [SchemeLayout]   = { col_green,    col_bg1,   col_bdr1 }, /* 0x22 */
@@ -89,6 +89,7 @@ static const Layout layouts[] = {
 
 /* key definitions */
 #define AltMask Mod1Mask
+#define AllMask AltMask|ShiftMask|ControlMask
 #define MODKEY Mod4Mask
 #define TAGKEYS(KEY,TAG) \
   { MODKEY,                       KEY, toggleview,     {.ui = 1ULL << TAG} }, \
@@ -114,7 +115,7 @@ static const char *termcmd[]  = { "st", NULL };
 
 static Key keys[] = {
   /* modifier                     key              function         argument */
-  { MODKEY|AltMask|ShiftMask,     XK_Escape,       quit,            {0} },
+  { MODKEY|AllMask,               XK_BackSpace,    quit,            {0} },
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
