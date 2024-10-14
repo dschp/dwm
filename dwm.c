@@ -800,6 +800,7 @@ drawbar(Monitor *m)
   }
 
   const Workspace *ws = WORKSPACE(m);
+  const size_t x_limit = m->ww - tw;
   x = 0;
 
   {
@@ -841,12 +842,18 @@ drawbar(Monitor *m)
     x += w;
   }
 
-  for (uint64_t bit = 1, i = 0; i < LENGTH(tags); i++, bit <<= 1) {
+  const char overflow[] = "...";
+  const int ow = TEXTW(overflow) + 1;
+  const size_t ox = x_limit - ow;
+
+  for (uint64_t bit = 1, i = 0; i < LENGTH(tags) && x < x_limit; i++, bit <<= 1) {
     uint64_t selected = bit & WORKSPACE(m)->tags;
     uint64_t has_client = bit & occ;
     uint64_t is_urgent = bit & urg;
     if (selected || has_client) {
       w = TEXTW(tags[i]);
+      if (x + w > x_limit) w = x_limit - x;
+
       drw_setscheme(drw, scheme[selected ? SchemeSel : SchemeNorm]);
       drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], is_urgent);
       if (has_client) {
@@ -859,68 +866,63 @@ drawbar(Monitor *m)
     }
   }
 
-  w = m->ww - tw - x;
-  if (w > bh) {
-    if (cnt_vis == 0) {
+  w = x_limit - x;
+  if (w == 0) {
+    drw_setscheme(drw, scheme[SchemeOverflow]);
+    drw_text(drw, ox + 1, 0, ow - 1, bh, lrpad / 2, overflow, 1);
+  } else if (cnt_vis == 0) {
+    drw_setscheme(drw, scheme[SchemeNorm]);
+    drw_rect(drw, x, 0, w, bh, 1, 1);
+  } else  {
+    size_t end_x = x_limit;
+    size_t each_w = w / cnt_vis;
+    size_t drawable_cnt = cnt_vis;
+    if (each_w < BAR_CLIENT_MIN_WIDTH) {
       drw_setscheme(drw, scheme[SchemeNorm]);
-      drw_rect(drw, x, 0, w, bh, 1, 1);
-    } else {
-      size_t end_x = m->ww - tw;
-      size_t each_w = w / cnt_vis;
-      if (each_w < BAR_CLIENT_MIN_WIDTH) {
-	const char overflow[] = "...";
-	const int ow = TEXTW(overflow);
-	const size_t ox = m->ww - tw - ow;
+      drw_rect(drw, ox, 0, 1, bh, 1, 1);
+      drw_setscheme(drw, scheme[SchemeOverflow]);
+      drw_text(drw, ox + 1, 0, ow - 1, bh, lrpad / 2, overflow, 1);
 
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_rect(drw, ox - 1, 0, 1, bh, 1, 1);
-	drw_setscheme(drw, scheme[SchemeOverflow]);
-	drw_text(drw, ox, 0, ow, bh, lrpad / 2, overflow, 1);
+      end_x -= ow;
+      w -= ow;
+      drawable_cnt = MAX(w / BAR_CLIENT_MIN_WIDTH, 1);
+      each_w = w / drawable_cnt;
+    }
 
-	end_x -= ow + 1;
-	w -= ow + 1;
-	each_w = w / (w / BAR_CLIENT_MIN_WIDTH);
+    for (c = m->clients; drawable_cnt > 0; c = c->next) {
+      if (!ISVISIBLE(c)) continue;
+
+      drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
+
+      char buf[2 * sizeof(((Client){0}).name)];
+      const char *fmt = "[%s] %s";
+      size_t tag_i = log2(c->tags & -(c->tags));
+      const char *tname = tags[tag_i];
+
+      if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
+	fmt = "<%s> %s";
+      }
+      snprintf(buf, sizeof(buf), fmt, tname, c->name);
+
+      size_t client_w = each_w;
+      if (cnt_vis == 1) {
+	client_w = MIN(MAX(TEXTW(buf), BAR_CLIENT_MAX_WIDTH), w);
+      } else if (drawable_cnt == 1) {
+	client_w = end_x - x;
       }
 
-      for (c = m->clients; c && x < end_x; c = c->next) {
-	if (!ISVISIBLE(c)) continue;
+      drw_text(drw, x, 0, client_w, bh, lrpad / 2, buf, c == m->sel);
+      if (c->isfloating)
+	drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		 c == m->sel || c->isfixed, c == m->sel);
 
-	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
+      x += client_w;
+      drawable_cnt--;
+    }
 
-	char buf[20 + sizeof(((Client){0}).name)];
-	const char *fmt = "[%s] %s";
-	size_t i = 0;
-	if (c->tags != 1) {
-	  i++;
-	  for (uint64_t t = 1 << 1; i < LENGTH(tags); i++, t <<= 1)
-	    if (t & c->tags) break;
-	}
-	const char *tname = tags[i];
-
-	if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
-	  fmt = "<%s> %s";
-	}
-	snprintf(buf, sizeof(buf), fmt, tname, c->name);
-
-	size_t client_w = each_w;
-	if (cnt_vis == 1) {
-	  client_w = MIN(MAX(TEXTW(buf), BAR_CLIENT_MAX_WIDTH), w);
-	} else if (x + 2 * each_w > end_x) {
-	  client_w = end_x - x;
-	}
-
-	drw_text(drw, x, 0, client_w, bh, lrpad / 2, buf, c == m->sel);
-	if (c->isfloating)
-	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		   c == m->sel || c->isfixed, c == m->sel);
-
-	x += client_w;
-      }
-
-      if (x < end_x) {
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_rect(drw, x, 0, end_x - x, bh, 1, 1);
-      }
+    if (x < end_x) {
+      drw_setscheme(drw, scheme[SchemeNorm]);
+      drw_rect(drw, x, 0, end_x - x, bh, 1, 1);
     }
   }
 
@@ -1274,6 +1276,8 @@ grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, siz
 void
 incnmaster(const Arg *arg)
 {
+	if (selmon->sel && selmon->sel->isfloating) return;
+
 	Workspace *ws = WORKSPACE(selmon);
 	ws->nmaster = MAX(ws->nmaster + arg->i, 0);
 	arrange(selmon);
