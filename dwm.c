@@ -232,6 +232,8 @@ static void tileleft(Monitor *m);
 static void tileright(Monitor *m);
 static void tilelimitleft(Monitor *m);
 static void tilelimitright(Monitor *m);
+static void tilelimit2left(Monitor *m);
+static void tilelimit2right(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggleview(const Arg *arg);
@@ -2303,7 +2305,7 @@ tilelimit(Monitor *m, int right)
   if (!n) return;
 
   const Workspace *ws = WORKSPACE(m);
-  const char def[] = "[]-";
+  const char *def = right ? "[]-" : "-[]";
   if (n == 1) {
     c = nexttiled(m->clients);
     resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
@@ -2314,17 +2316,17 @@ tilelimit(Monitor *m, int right)
     resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
     n--;
 
-    const size_t div_cnt = MIN(n, MAX(ws->nmaster, 1));
+    const size_t tile_cnt = MIN(n, MAX(ws->nmaster, 1));
     const size_t cw = m->mw - mw - 2 * c->bw;
-    const size_t each_h = m->wh / div_cnt;
-    const size_t limit = div_cnt - 1;
+    const size_t each_h = m->wh / tile_cnt;
+    const size_t limit = tile_cnt - 1;
     for (i = 0; i < n; i++) {
       c = nexttiled(c->next);
       resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
     }
 
-    if (n > div_cnt)
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, "[]-/%ld", n - div_cnt);
+    if (n > tile_cnt)
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]-/%ld" : "-/%ld[]", n - tile_cnt);
     else
       snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
   }
@@ -2340,6 +2342,60 @@ void
 tilelimitright(Monitor *m)
 {
   tilelimit(m, 1);
+}
+
+void
+tilelimit2(Monitor *m, int right)
+{
+  size_t i, n, mw;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  const Workspace *ws = WORKSPACE(m);
+  const char *def = right ? "[]%%" : "%%[]";
+  if (n == 1) {
+    c = nexttiled(m->clients);
+    resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
+  } else {
+    mw = m->ww * ws->mfact;
+    c = nexttiled(m->clients);
+    resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
+    n--;
+
+    const size_t cw = m->mw - mw - 2 * c->bw;
+    size_t each_h = m->wh / n;
+    if (each_h > TILE_LIMIT_MIN_HEIGHT) {
+      for (i = 0; i < n; i++) {
+	c = nexttiled(c->next);
+	resize(c, m->wx + (right ? mw : 0), m->wy + i * each_h, cw, each_h - 2 * c->bw, 0);
+      }
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
+    } else {
+      const size_t tile_cnt  = MAX(m->wh / TILE_LIMIT_MIN_HEIGHT, 1);
+      each_h = m->wh / tile_cnt;
+      const size_t limit = tile_cnt - 1;
+      for (i = 0; i < n; i++) {
+	c = nexttiled(c->next);
+	resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
+      }
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]%%%ld" : "%%%ld[]", n - tile_cnt);
+    }
+  }
+}
+
+void
+tilelimit2left(Monitor *m)
+{
+  tilelimit2(m, 0);
+}
+
+void
+tilelimit2right(Monitor *m)
+{
+  tilelimit2(m, 1);
 }
 
 void

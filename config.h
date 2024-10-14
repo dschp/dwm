@@ -7,6 +7,8 @@
 #define STATUS_SEP_LEN   sizeof(status_separator) - 1
 static const char status_separator[] = " / ";
 
+#define TILE_LIMIT_MIN_HEIGHT 200
+
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 16;       /* snap pixel */
@@ -75,15 +77,17 @@ static const int resizehints = 1;    /* 1 means respect size hints in tiled resi
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 
 static const Layout layouts[] = {
-  /* symbol     arrange function */
-  { "[]=",      tileright },
-  { "=[]",      tileleft },
-  { "[M]",      monocle },
-  { "#",        grid },
-  { "+#",       gridtileright },
-  { "#+",       gridtileleft },
-  { "[]-",      tilelimitright },
-  { "-[]",      tilelimitleft },
+  /* symbol   arrange function */
+  { "[]=",    tileright },        /*  0 */
+  { "=[]",    tileleft },         /*  1 */
+  { "[M]",    monocle },          /*  2 */
+  { "#",      grid },             /*  3 */
+  { "+#",     gridtileright },    /*  4 */
+  { "#+",     gridtileleft },     /*  5 */
+  { "[]-",    tilelimitright },   /*  6 */
+  { "-[]",    tilelimitleft },    /*  7 */
+  { "[]%",    tilelimit2right },  /*  8 */
+  { "%[]",    tilelimit2left },   /*  9 */
 };
 
 /* key definitions */
@@ -116,12 +120,14 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
   { MODKEY,                       XK_Left,         setlayout,       {.v = &layouts[0]} },
   { MODKEY,                       XK_Right,        setlayout,       {.v = &layouts[1]} },
-  { MODKEY,                       XK_Up,           setlayout,       {.v = &layouts[2]} },
-  { MODKEY,                       XK_Down,         setlayout,       {.v = &layouts[3]} },
+  { MODKEY,                       XK_Up,           setlayout,       {.v = &layouts[8]} },
+  { MODKEY,                       XK_Down,         setlayout,       {.v = &layouts[9]} },
   { MODKEY|ShiftMask,             XK_Left,         setlayout,       {.v = &layouts[4]} },
   { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.v = &layouts[5]} },
   { MODKEY|ShiftMask,             XK_Up,           setlayout,       {.v = &layouts[6]} },
   { MODKEY|ShiftMask,             XK_Down,         setlayout,       {.v = &layouts[7]} },
+  { MODKEY|AltMask,               XK_Up,           setlayout,       {.v = &layouts[2]} },
+  { MODKEY|AltMask,               XK_Down,         setlayout,       {.v = &layouts[3]} },
   { MODKEY,                       XK_Tab,          toggleview,      {.ui = 0 } },
   { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
   { MODKEY|ControlMask,           XK_Tab,          switchworkspace, {.i = -1 } },
