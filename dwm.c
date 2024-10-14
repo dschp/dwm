@@ -2041,6 +2041,7 @@ void
 setmfact(const Arg *arg)
 {
 	float f;
+	if (selmon->sel && selmon->sel->isfloating) return;
 
 	if (!arg || !WORKSPACE(selmon)->layout->arrange)
 		return;
