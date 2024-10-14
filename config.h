@@ -1,6 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
-#define BAR_CLIENT_MAX_WIDTH 250
+#define BAR_CLIENT_MIN_WIDTH 100
+#define BAR_CLIENT_MAX_WIDTH 300
 #define ENV_STATUS_DIR   "STATUS_DIR"
 #define STATUS_MAX_FILE  10
 #define STATUS_SEP_LEN   sizeof(status_separator) - 1

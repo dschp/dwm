@@ -857,8 +857,6 @@ drawbar(Monitor *m)
 
       x += w;
     }
-
-    clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
   }
 
   w = m->ww - tw - x;
@@ -867,12 +865,24 @@ drawbar(Monitor *m)
       drw_setscheme(drw, scheme[SchemeNorm]);
       drw_rect(drw, x, 0, w, bh, 1, 1);
     } else {
-      const char overflow[] = "...";
-      const int ow = TEXTW(overflow);
-      const int limit = m->ww - tw;
+      size_t end_x = m->ww - tw;
+      size_t each_w = w / cnt_vis;
+      if (each_w < BAR_CLIENT_MIN_WIDTH) {
+	const char overflow[] = "...";
+	const int ow = TEXTW(overflow);
+	const size_t ox = m->ww - tw - ow;
 
-      c = m->clients;
-      for (; c && x < limit; c = c->next) {
+	drw_setscheme(drw, scheme[SchemeNorm]);
+	drw_rect(drw, ox - 1, 0, 1, bh, 1, 1);
+	drw_setscheme(drw, scheme[SchemeOverflow]);
+	drw_text(drw, ox, 0, ow, bh, lrpad / 2, overflow, 1);
+
+	end_x -= ow + 1;
+	w -= ow + 1;
+	each_w = w / (w / BAR_CLIENT_MIN_WIDTH);
+      }
+
+      for (c = m->clients; c && x < end_x; c = c->next) {
 	if (!ISVISIBLE(c)) continue;
 
 	drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
@@ -892,28 +902,30 @@ drawbar(Monitor *m)
 	}
 	snprintf(buf, sizeof(buf), fmt, tname, c->name);
 
-	int tag_w = MIN(TEXTW(buf), BAR_CLIENT_MAX_WIDTH);
-	if (x + tag_w > limit) tag_w = limit - x;
+	size_t client_w = each_w;
+	if (cnt_vis == 1) {
+	  client_w = MIN(MAX(TEXTW(buf), BAR_CLIENT_MAX_WIDTH), w);
+	} else if (x + 2 * each_w > end_x) {
+	  client_w = end_x - x;
+	}
 
-	drw_text(drw, x, 0, tag_w, bh, lrpad / 2, buf, c == m->sel);
- 	if (c->isfloating)
- 	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
- 		   c == m->sel || c->isfixed, c == m->sel);
+	drw_text(drw, x, 0, client_w, bh, lrpad / 2, buf, c == m->sel);
+	if (c->isfloating)
+	  drw_rect(drw, x + boxs, boxs, boxw, boxw,
+		   c == m->sel || c->isfixed, c == m->sel);
 
-	x += tag_w;
+	x += client_w;
       }
 
-      if (x < limit) {
+      if (x < end_x) {
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	drw_rect(drw, x, 0, limit - x, bh, 1, 1);
-      } else {
-	drw_setscheme(drw, scheme[SchemeOverflow]);
-	drw_text(drw, limit - ow, 0, ow, bh, lrpad / 2, overflow, 1);
+	drw_rect(drw, x, 0, end_x - x, bh, 1, 1);
       }
     }
   }
 
   drw_map(drw, m->barwin, 0, 0, m->ww, bh);
+  clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
 }
 
 void
