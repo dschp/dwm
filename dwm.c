@@ -230,6 +230,8 @@ static void tag(const Arg *arg);
 void tile(Monitor *m, int right);
 static void tileleft(Monitor *m);
 static void tileright(Monitor *m);
+static void tilelimitleft(Monitor *m);
+static void tilelimitright(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggleview(const Arg *arg);
@@ -858,7 +860,7 @@ drawbar(Monitor *m)
       drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], is_urgent);
       if (has_client) {
 	drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		 m == selmon && m->sel && 1ULL << i == m->sel->tags,
+		 m == selmon && m->sel && bit & m->sel->tags,
 		 is_urgent);
       }
 
@@ -1038,19 +1040,13 @@ focus_1st_visible(uint64_t tags)
     if (c->tags & tags) {
       if (!tiled_candidate) tiled_candidate = c;
       if (c->isfloating) {
-	justfocus(c);
+	focus(c);
 	return;
       }
     }
   }
   if (tiled_candidate) {
-    justfocus(tiled_candidate);
-    return;
-  }
-
-  if (selmon->sel && !ISVISIBLE(selmon->sel)) {
-    unfocus(selmon->sel, 0);
-    selmon->sel = NULL;
+    focus(tiled_candidate);
   }
 }
 
@@ -1281,19 +1277,6 @@ incnmaster(const Arg *arg)
 	Workspace *ws = WORKSPACE(selmon);
 	ws->nmaster = MAX(ws->nmaster + arg->i, 0);
 	arrange(selmon);
-}
-
-void
-justfocus(Client *c)
-{
-  if (!c) return;
-
-  unfocus(selmon->sel, 0);
-
-  grabbuttons(c, 1);
-  XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
-  setfocus(c);
-  selmon->sel = c;
 }
 
 #ifdef XINERAMA
@@ -2308,6 +2291,55 @@ void
 tileright(Monitor *m)
 {
   tile(m, 1);
+}
+
+void
+tilelimit(Monitor *m, int right)
+{
+  size_t i, n, mw;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  const Workspace *ws = WORKSPACE(m);
+  const char def[] = "[]-";
+  if (n == 1) {
+    c = nexttiled(m->clients);
+    resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
+  } else {
+    mw = m->ww * ws->mfact;
+    c = nexttiled(m->clients);
+    resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
+    n--;
+
+    const size_t div_cnt = MIN(n, MAX(ws->nmaster, 1));
+    const size_t cw = m->mw - mw - 2 * c->bw;
+    const size_t each_h = m->wh / div_cnt;
+    const size_t limit = div_cnt - 1;
+    for (i = 0; i < n; i++) {
+      c = nexttiled(c->next);
+      resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
+    }
+
+    if (n > div_cnt)
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, "[]-/%ld", n - div_cnt);
+    else
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
+  }
+}
+
+void
+tilelimitleft(Monitor *m)
+{
+  tilelimit(m, 0);
+}
+
+void
+tilelimitright(Monitor *m)
+{
+  tilelimit(m, 1);
 }
 
 void
