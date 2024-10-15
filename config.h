@@ -89,7 +89,7 @@ static const Layout layouts[] = {
   { "[]%",    tilelimit2right },  /*  8 */
   { "%[]",    tilelimit2left },   /*  9 */
   { "(0,0)",  xyzero },           /* 10 */
-  { "<>",     stackcenter },      /* 11 */
+  { "><",     stackcenter },      /* 11 */
 };
 
 /* key definitions */
