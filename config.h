@@ -80,7 +80,7 @@ static const Layout layouts[] = {
   /* symbol   arrange function */
   { "[]=",    tileright },        /*  0 */
   { "=[]",    tileleft },         /*  1 */
-  { "[M]",    monocle },          /*  2 */
+  { "|+|",    gridnmaster },      /*  2 */
   { "#",      grid },             /*  3 */
   { "+#",     gridtileright },    /*  4 */
   { "#+",     gridtileleft },     /*  5 */
@@ -88,8 +88,8 @@ static const Layout layouts[] = {
   { "-[]",    tilelimitleft },    /*  7 */
   { "[]%",    tilelimit2right },  /*  8 */
   { "%[]",    tilelimit2left },   /*  9 */
-  { "|+|",    gridnmaster },      /* 10 */
-  { "(0,0)",  xyzero },           /* 11 */
+  { "(0,0)",  xyzero },           /* 10 */
+  { "<>",     stackcenter },      /* 11 */
 };
 
 /* key definitions */

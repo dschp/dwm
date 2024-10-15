@@ -194,7 +194,6 @@ static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void maximize(const Arg *arg);
-static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
 static void moveclient_x(const Arg *arg);
@@ -228,6 +227,7 @@ static void showhide(Client *c);
 static void snapandcenter_x(const Arg *arg);
 static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
+static void stackcenter(Monitor *m);
 static void switchworkspace(const Arg *arg);
 static void tag(const Arg *arg);
 void tile(Monitor *m, int right);
@@ -1465,13 +1465,6 @@ maximize(const Arg *arg)
 }
 
 void
-monocle(Monitor *m)
-{
-  for (Client *c = nexttiled(m->clients); c; c = nexttiled(c->next))
-    resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
-}
-
-void
 motionnotify(XEvent *e)
 {
 	static Monitor *mon = NULL;
@@ -2251,6 +2244,15 @@ spawn(const Arg *arg)
 		execvp(((char **)arg->v)[0], (char **)arg->v);
 		die("dwm: execvp '%s' failed:", ((char **)arg->v)[0]);
 	}
+}
+
+void
+stackcenter(Monitor *m)
+{
+  Client *c;
+  for (c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
+    resize(c, (m->ww - c->w) / 2, (m->wh - c->h) / 2, c->w, c->h, 0);
+  }
 }
 
 void
