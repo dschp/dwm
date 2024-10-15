@@ -2223,7 +2223,9 @@ void
 switchworkspace(const Arg *arg)
 {
   if (!arg) return;
-  int i = arg->i < 0 ? selmon->last_ws_idx : arg->i;
+  int i =
+    (arg->i >= 0 && arg->i != selmon->ws_idx) ? arg->i
+    : selmon->last_ws_idx;
 
   if (i >= LENGTH(tags) || i == selmon->ws_idx)
     return;
@@ -2426,9 +2428,12 @@ void
 toggleview(const Arg *arg)
 {
   Workspace *ws = WORKSPACE(selmon);
-  uint64_t arg_tag = (arg->ui == 0) ?
-    ws->last_toggled_tags : arg->ui & TAGMASK;
-  if (!arg_tag || arg_tag & ws->own_tag) return;
+  uint64_t arg_tag =
+    arg->ui == 0 ? ws->last_toggled_tags
+    : arg->ui != ws->own_tag ? arg->ui & TAGMASK
+    : ws->tags == ws->own_tag ? ws->last_toggled_tags
+    : ws->tags ^ ws->own_tag;
+  if (!arg_tag) return;
 
   uint64_t newtags = ws->tags ^ arg_tag;
   if (!newtags) return;
