@@ -888,7 +888,7 @@ drawbar(Monitor *m)
 	const size_t s = 3;
 	const size_t ix = x + w / 2 - 1, iy = bh - s;
 	for (int i = 0; i < s; i++)
-	  drw_rect(drw, ix - i, iy + i, 1 + i * 2, 1, 1, 0);
+	  drw_rect(drw, ix - i, iy + i, 1 + i * 2, 1, 1, view_on);
       }
 
       x += w;
