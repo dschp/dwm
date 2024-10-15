@@ -144,6 +144,7 @@ typedef struct {
   float mfact;
   int nmaster;
   uint64_t last_toggled_tags;
+  int spawn_floating;
 } Workspace;
 
 /* function declarations */
@@ -239,6 +240,7 @@ static void tilelimit2left(Monitor *m);
 static void tilelimit2right(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
+static void togglespawnfloating(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
@@ -357,6 +359,8 @@ applyrules(Client *c)
 		XFree(ch.res_name);
 	if (!(c->tags & TAGMASK))
 		c->tags = ws->own_tag;
+	if (!c->isfloating)
+		c->isfloating = ws->spawn_floating;
 }
 
 int
@@ -698,6 +702,7 @@ createmon(void)
 	  ws->mfact = mfact;
 	  ws->nmaster = nmaster;
 	  ws->last_toggled_tags = 0;
+	  ws->spawn_floating = 0;
 	}
 	m->showbar = showbar;
 	m->topbar = topbar;
@@ -821,6 +826,9 @@ drawbar(Monitor *m)
     w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeLayout]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 1);
+
+    if (ws->spawn_floating)
+      drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, 1);
     x += w;
   }
 
@@ -2469,6 +2477,14 @@ togglefloating(const Arg *arg)
 		resize(selmon->sel, selmon->sel->x, selmon->sel->y,
 			selmon->sel->w, selmon->sel->h, 0);
 	arrange(selmon);
+}
+
+void
+togglespawnfloating(const Arg *arg)
+{
+  Workspace *ws = WORKSPACE(selmon);
+  ws->spawn_floating ^= 1;
+  drawbar(selmon);
 }
 
 void
