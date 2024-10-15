@@ -498,10 +498,14 @@ centerwindow(const Arg *arg)
 {
   Client *c = selmon->sel;
   if (c && c->isfloating) {
-    int x = (selmon->ww - c->w) / 2;
-    int y = (selmon->wh - c->h) / 2;
+    uint maxw = selmon->ww - 2 * c->bw;
+    uint maxh = selmon->wh - 2 * c->bw;
+    uint w = MIN(c->w, maxw);
+    uint h = MIN(c->h, maxh);
+    uint x = selmon->wx + (maxw - w) / 2;
+    uint y = selmon->wy + (maxh - h) / 2;
 
-    moveclient(c, x, y, c->w, c->h);
+    moveclient(c, x, y, w, h);
   }
 }
 
@@ -2251,7 +2255,14 @@ stackcenter(Monitor *m)
 {
   Client *c;
   for (c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
-    resize(c, (m->ww - c->w) / 2, (m->wh - c->h) / 2, c->w, c->h, 0);
+    uint maxw = selmon->ww - 2 * c->bw;
+    uint maxh = selmon->wh - 2 * c->bw;
+    uint w = MIN(c->w, maxw);
+    uint h = MIN(c->h, maxh);
+    uint x = m->wx + (maxw - w) / 2;
+    uint y = m->wy + (maxh - h) / 2;
+
+    resize(c, x, y, w, h, 0);
   }
 }
 
@@ -2864,7 +2875,9 @@ xyzero(Monitor *m)
 {
   Client *c;
   for (c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
-    resize(c, 0, 0, MIN(c->w, m->ww), MIN(c->h, m->wh), 0);
+    resize(c, m->wx, m->wy,
+	   MIN(c->w, m->ww - 2 * c->bw), MIN(c->h, m->wh - 2 * c->bw),
+	   0);
   }
 }
 
