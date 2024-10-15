@@ -2305,8 +2305,10 @@ tag(const Arg *arg)
   selmon->sel->tags = arg_tag;
 
   if (!(arg_tag & ws->tags)) {
-    focus(NULL);
+    focus_1st_visible(ws->tags);
     arrange(selmon);
+  } else {
+    drawbar(selmon);
   }
 }
 
@@ -2504,6 +2506,8 @@ toggletag(const Arg *arg)
     if (!(newtags & ws->tags)) {
       focus_1st_visible(ws->tags);
       arrange(selmon);
+    } else {
+      drawbar(selmon);
     }
   }
 }
