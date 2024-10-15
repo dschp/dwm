@@ -62,6 +62,8 @@
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 #define TEXTW_(X)               (drw_fontset_getwidth(drw, (X)))
 
+typedef unsigned int uint;
+
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { /* color schemes */
@@ -179,10 +181,11 @@ static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
 static void grid(Monitor *m);
+static void gridnmaster(Monitor *m);
 void gridtile(Monitor *m, int right);
 static void gridtileleft(Monitor *m);
 static void gridtileright(Monitor *m);
-Client* grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, size_t h);
+Client* grid_resize(Monitor *m, Client *c, uint cnt, uint x, uint y, uint w, uint h);
 static void incnmaster(const Arg *arg);
 void justfocus(Client *c);
 static void keypress(XEvent *e);
@@ -256,6 +259,7 @@ static Monitor *wintomon(Window w);
 static int xerror(Display *dpy, XErrorEvent *ee);
 static int xerrordummy(Display *dpy, XErrorEvent *ee);
 static int xerrorstart(Display *dpy, XErrorEvent *ee);
+static void xyzero(Monitor *m);
 static void zoom(const Arg *arg);
 
 /* variables */
@@ -759,7 +763,7 @@ drawbar(Monitor *m)
     }
     *p2 = '\0';
 
-    const size_t status_lrpad = 4;
+    const uint status_lrpad = 4;
     tw = TEXTW_(buf) + (status_lrpad * 2);
 
     drw_setscheme(drw, scheme[SchemeNorm]);
@@ -804,7 +808,7 @@ drawbar(Monitor *m)
   }
 
   const Workspace *ws = WORKSPACE(m);
-  const size_t x_limit = m->ww - tw;
+  const uint x_limit = m->ww - tw;
   x = 0;
 
   {
@@ -848,7 +852,7 @@ drawbar(Monitor *m)
 
   const char overflow[] = "...";
   const int ow = TEXTW(overflow) + 1;
-  const size_t ox = x_limit - ow;
+  const uint ox = x_limit - ow;
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags) && x < x_limit; i++, bit <<= 1) {
     uint64_t selected = bit & WORKSPACE(m)->tags;
@@ -878,9 +882,9 @@ drawbar(Monitor *m)
     drw_setscheme(drw, scheme[SchemeNorm]);
     drw_rect(drw, x, 0, w, bh, 1, 1);
   } else  {
-    size_t end_x = x_limit;
-    size_t each_w = w / cnt_vis;
-    size_t drawable_cnt = cnt_vis;
+    uint end_x = x_limit;
+    uint each_w = w / cnt_vis;
+    uint drawable_cnt = cnt_vis;
     if (each_w < BAR_CLIENT_MIN_WIDTH) {
       drw_setscheme(drw, scheme[SchemeNorm]);
       drw_rect(drw, ox, 0, 1, bh, 1, 1);
@@ -908,7 +912,7 @@ drawbar(Monitor *m)
       }
       snprintf(buf, sizeof(buf), fmt, tname, c->name);
 
-      size_t client_w = each_w;
+      uint client_w = each_w;
       if (cnt_vis == 1) {
 	client_w = MIN(MAX(TEXTW(buf), BAR_CLIENT_MAX_WIDTH), w);
       } else if (drawable_cnt == 1) {
@@ -1170,7 +1174,7 @@ grabkeys(void)
 
 void
 grid(Monitor *m) {
-  size_t n;
+  uint n;
   Client *c;
 
   for(n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -1180,9 +1184,36 @@ grid(Monitor *m) {
 }
 
 void
+gridnmaster(Monitor *m)
+{
+  uint n = 0;
+  Client *c;
+
+  const Workspace *ws = WORKSPACE(m);
+  const uint grid_cnt = MAX(ws->nmaster, 1);
+  const uint cell_cnt = grid_cnt * grid_cnt;
+  const uint gw = m->ww / grid_cnt;
+  const uint gh = m->wh / grid_cnt;
+
+  for (c = nexttiled(m->clients); c; c = nexttiled(c->next), n++) {
+    uint a = n % cell_cnt;
+    uint row = a / grid_cnt;
+    uint col = a % grid_cnt;
+
+    resize(c, col * gw, row * gh, gw - 2 * c->bw, gh - 2 * c->bw, 0);
+  }
+
+  const int behinds = n - cell_cnt;
+  if (n > 0 && behinds > 0)
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, "|%d|/%d", cell_cnt, behinds);
+  else
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, "|%d|", cell_cnt);
+}
+
+void
 gridtile(Monitor *m, int right)
 {
-  size_t n, mw, m_cnt;
+  uint n, mw, m_cnt;
   Client *c;
 
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -1231,20 +1262,20 @@ gridtileright(Monitor *m)
 }
 
 Client*
-grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, size_t h)
+grid_resize(Monitor *m, Client *c, uint cnt, uint x, uint y, uint w, uint h)
 {
   if (!c) return c;
 
-  const size_t g = ceil(sqrt(cnt));
-  const size_t q = cnt / g;
-  const size_t r = cnt % g;
-  const size_t e = g - r;
+  const uint g = ceil(sqrt(cnt));
+  const uint q = cnt / g;
+  const uint r = cnt % g;
+  const uint e = g - r;
 
-  const size_t g_fixed = (w > h ? w : h) / g;
+  const uint g_fixed = (w > h ? w : h) / g;
 
-  size_t col_i = 0, row_i = 0;
-  size_t cel_cnt = q, g_inflatable = (w > h ? h : w) / q;
-  for (size_t i = 0; c && i < cnt; c = nexttiled(c->next), i++, row_i++) {
+  uint col_i = 0, row_i = 0;
+  uint cel_cnt = q, g_inflatable = (w > h ? h : w) / q;
+  for (uint i = 0; c && i < cnt; c = nexttiled(c->next), i++, row_i++) {
     if (row_i == cel_cnt) {
       row_i = 0;
       col_i++;
@@ -1254,7 +1285,7 @@ grid_resize(Monitor *m, Client *c, size_t cnt, size_t x, size_t y, size_t w, siz
       }
     }
 
-    size_t cx, cy;
+    uint cx, cy;
     if (w > h) {
       cx = col_i * g_fixed;
       cy = row_i * g_inflatable;
@@ -2255,7 +2286,7 @@ tag(const Arg *arg)
 void
 tile(Monitor *m, int right)
 {
-  size_t i, n, h, mw, my, ty;
+  uint i, n, h, mw, my, ty;
   Client *c;
 
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -2301,7 +2332,7 @@ tileright(Monitor *m)
 void
 tilelimit(Monitor *m, int right)
 {
-  size_t i, n, mw;
+  uint i, n, mw;
   Client *c;
 
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -2319,17 +2350,17 @@ tilelimit(Monitor *m, int right)
     resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
     n--;
 
-    const size_t tile_cnt = MIN(n, MAX(ws->nmaster, 1));
-    const size_t cw = m->mw - mw - 2 * c->bw;
-    const size_t each_h = m->wh / tile_cnt;
-    const size_t limit = tile_cnt - 1;
+    const uint tile_cnt = MIN(n, MAX(ws->nmaster, 1));
+    const uint cw = m->mw - mw - 2 * c->bw;
+    const uint each_h = m->wh / tile_cnt;
+    const uint limit = tile_cnt - 1;
     for (i = 0; i < n; i++) {
       c = nexttiled(c->next);
       resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
     }
 
     if (n > tile_cnt)
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]-/%ld" : "-/%ld[]", n - tile_cnt);
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]-/%d" : "-/%d[]", n - tile_cnt);
     else
       snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
   }
@@ -2350,7 +2381,7 @@ tilelimitright(Monitor *m)
 void
 tilelimit2(Monitor *m, int right)
 {
-  size_t i, n, mw;
+  uint n;
   Client *c;
 
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -2363,28 +2394,28 @@ tilelimit2(Monitor *m, int right)
     resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
     snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
   } else {
-    mw = m->ww * ws->mfact;
+    uint mw = m->ww * ws->mfact;
     c = nexttiled(m->clients);
     resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
     n--;
 
-    const size_t cw = m->mw - mw - 2 * c->bw;
-    size_t each_h = m->wh / n;
+    const uint cw = m->mw - mw - 2 * c->bw;
+    uint each_h = m->wh / n;
     if (each_h > TILE_LIMIT_MIN_HEIGHT) {
-      for (i = 0; i < n; i++) {
+      for (uint i = 0; i < n; i++) {
 	c = nexttiled(c->next);
 	resize(c, m->wx + (right ? mw : 0), m->wy + i * each_h, cw, each_h - 2 * c->bw, 0);
       }
       snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
     } else {
-      const size_t tile_cnt  = MAX(m->wh / TILE_LIMIT_MIN_HEIGHT, 1);
+      const uint tile_cnt  = MAX(m->wh / TILE_LIMIT_MIN_HEIGHT, 1);
       each_h = m->wh / tile_cnt;
-      const size_t limit = tile_cnt - 1;
-      for (i = 0; i < n; i++) {
+      const uint limit = tile_cnt - 1;
+      for (uint i = 0; i < n; i++) {
 	c = nexttiled(c->next);
 	resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
       }
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]%%%ld" : "%%%ld[]", n - tile_cnt);
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]%%%d" : "%%%d[]", n - tile_cnt);
     }
   }
 }
@@ -2821,6 +2852,15 @@ xerrorstart(Display *dpy, XErrorEvent *ee)
 {
 	die("dwm: another window manager is already running");
 	return -1;
+}
+
+void
+xyzero(Monitor *m)
+{
+  Client *c;
+  for (c = nexttiled(m->clients); c; c = nexttiled(c->next)) {
+    resize(c, 0, 0, MIN(c->w, m->ww), MIN(c->h, m->wh), 0);
+  }
 }
 
 void

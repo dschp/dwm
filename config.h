@@ -88,6 +88,8 @@ static const Layout layouts[] = {
   { "-[]",    tilelimitleft },    /*  7 */
   { "[]%",    tilelimit2right },  /*  8 */
   { "%[]",    tilelimit2left },   /*  9 */
+  { "|+|",    gridnmaster },      /* 10 */
+  { "(0,0)",  xyzero },           /* 11 */
 };
 
 /* key definitions */
@@ -127,6 +129,8 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.v = &layouts[5]} },
   { MODKEY|ShiftMask,             XK_Up,           setlayout,       {.v = &layouts[6]} },
   { MODKEY|ShiftMask,             XK_Down,         setlayout,       {.v = &layouts[7]} },
+  { MODKEY|AltMask,               XK_Left,         setlayout,       {.v = &layouts[10]} },
+  { MODKEY|AltMask,               XK_Right,        setlayout,       {.v = &layouts[11]} },
   { MODKEY|AltMask,               XK_Up,           setlayout,       {.v = &layouts[2]} },
   { MODKEY|AltMask,               XK_Down,         setlayout,       {.v = &layouts[3]} },
   { MODKEY,                       XK_Tab,          toggleview,      {.ui = 0 } },
