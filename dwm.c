@@ -2056,10 +2056,13 @@ setfullscreen(Client *c, int fullscreen)
 void
 setlayout(const Arg *arg)
 {
-  Workspace *ws = WORKSPACE(selmon);
-  if (!arg || !arg->v || arg->v == ws->layout) return;
+  if (!arg) return;
 
-  ws->layout = (Layout *)arg->v;
+  size_t i = arg->ui;
+  if (i >= sizeof(layouts)) return;
+
+  Workspace *ws = WORKSPACE(selmon);
+  ws->layout = &layouts[i];
   strncpy(selmon->ltsymbol, ws->layout->symbol, sizeof selmon->ltsymbol);
 
   if (selmon->sel)
