@@ -241,6 +241,7 @@ static void tilelimit2right(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void togglespawnfloating(const Arg *arg);
+static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
 static void unmanage(Client *c, int destroyed);
@@ -867,19 +868,27 @@ drawbar(Monitor *m)
   const uint ox = x_limit - ow;
 
   for (uint64_t bit = 1, i = 0; i < LENGTH(tags) && x < x_limit; i++, bit <<= 1) {
-    uint64_t selected = bit & WORKSPACE(m)->tags;
-    uint64_t has_client = bit & occ;
-    uint64_t is_urgent = bit & urg;
-    if (selected || has_client) {
+    int view_on = (bit & WORKSPACE(m)->tags) > 0;
+    int has_client = (bit & occ) > 0;
+    int is_urgent = (bit & urg) > 0;
+    if (view_on || has_client) {
       w = TEXTW(tags[i]);
       if (x + w > x_limit) w = x_limit - x;
 
-      drw_setscheme(drw, scheme[selected ? SchemeSel : SchemeNorm]);
+      drw_setscheme(drw, scheme[view_on ? SchemeSel : SchemeNorm]);
       drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], is_urgent);
       if (has_client) {
 	drw_rect(drw, x + boxs, boxs, boxw, boxw,
 		 m == selmon && m->sel && bit & m->sel->tags,
 		 is_urgent);
+      }
+
+      if (selmon->sel && bit & selmon->sel->tags) {
+ 	drw_setscheme(drw, scheme[SchemeTagged]);
+	const size_t s = 3;
+	const size_t ix = x + w / 2 - 1, iy = bh - s;
+	for (int i = 0; i < s; i++)
+	  drw_rect(drw, ix - i, iy + i, 1 + i * 2, 1, 1, 0);
       }
 
       x += w;
@@ -914,24 +923,14 @@ drawbar(Monitor *m)
 
       drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
 
-      char buf[2 * sizeof(((Client){0}).name)];
-      const char *fmt = "[%s] %s";
-      size_t tag_i = log2(c->tags & -(c->tags));
-      const char *tname = tags[tag_i];
-
-      if (strcmp(tname, "[") == 0 || strcmp(tname, "]") == 0) {
-	fmt = "<%s> %s";
-      }
-      snprintf(buf, sizeof(buf), fmt, tname, c->name);
-
       uint client_w = each_w;
       if (cnt_vis == 1) {
-	client_w = MIN(MAX(TEXTW(buf), BAR_CLIENT_MAX_WIDTH), w);
+	client_w = MIN(MAX(TEXTW(c->name), BAR_CLIENT_MAX_WIDTH), w);
       } else if (drawable_cnt == 1) {
 	client_w = end_x - x;
       }
 
-      drw_text(drw, x, 0, client_w, bh, lrpad / 2, buf, c == m->sel);
+      drw_text(drw, x, 0, client_w, bh, lrpad / 2, c->name, c == m->sel);
       if (c->isfloating)
 	drw_rect(drw, x + boxs, boxs, boxw, boxw,
 		 c == m->sel || c->isfixed, c == m->sel);
@@ -2299,12 +2298,16 @@ tag(const Arg *arg)
 {
   if (!selmon->sel) return;
 
-  uint64_t arg_tag = arg->ui & TAGMASK;
+  Workspace *ws = WORKSPACE(selmon);
+  uint64_t arg_tag = arg->ui == 0 ? ws->tags : arg->ui & TAGMASK;
   if (!arg_tag) return;
 
   selmon->sel->tags = arg_tag;
-  focus(NULL);
-  arrange(selmon);
+
+  if (!(arg_tag & ws->tags)) {
+    focus(NULL);
+    arrange(selmon);
+  }
 }
 
 void
@@ -2485,6 +2488,24 @@ togglespawnfloating(const Arg *arg)
   Workspace *ws = WORKSPACE(selmon);
   ws->spawn_floating ^= 1;
   drawbar(selmon);
+}
+
+void
+toggletag(const Arg *arg)
+{
+  uint64_t newtags;
+  if (!selmon->sel) return;
+
+  newtags = selmon->sel->tags ^ (arg->ui & TAGMASK);
+  if (newtags) {
+    selmon->sel->tags = newtags;
+
+    Workspace *ws = WORKSPACE(selmon);
+    if (!(newtags & ws->tags)) {
+      focus_1st_visible(ws->tags);
+      arrange(selmon);
+    }
+  }
 }
 
 void
