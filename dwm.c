@@ -2007,7 +2007,7 @@ setlayout(const Arg *arg)
   if (!arg) return;
 
   size_t i = arg->ui;
-  if (i >= sizeof(layouts)) return;
+  if (i >= LENGTH(layouts)) return;
 
   Workspace *ws = WORKSPACE(selmon);
   ws->layout = &layouts[i];
