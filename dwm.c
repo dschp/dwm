@@ -144,6 +144,7 @@ typedef struct {
   int v1;
   int v2;
   float vf;
+  Client *first_stack;
   uint64_t last_toggled_tags;
   int spawn_floating;
 } Workspace;
@@ -174,7 +175,10 @@ static void enternotify(XEvent *e);
 static void expose(XEvent *e);
 static void focus(Client *c);
 static void focusin(XEvent *e);
+static void focuscycle(const Arg *arg);
 static void focusstack(const Arg *arg);
+static void focus_1st_master(const Arg *arg);
+static void focus_1st_stack(const Arg *arg);
 void focus_1st_visible(uint64_t tags);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
@@ -449,9 +453,11 @@ arrange(Monitor *m)
 void
 arrangemon(Monitor *m)
 {
-  const Layout *l = WORKSPACE(m)->layout;
+  Workspace *ws = WORKSPACE(m);
+  const Layout *l = ws->layout;
   strncpy(m->ltsymbol, l->symbol, sizeof m->ltsymbol);
 
+  ws->first_stack = NULL;
   if (l->arrange) l->arrange(m);
 }
 
@@ -1030,6 +1036,51 @@ focusin(XEvent *e)
 }
 
 void
+focuscycle(const Arg *arg)
+{
+  Client *c = NULL, *i;
+  const Workspace *ws = WORKSPACE(selmon);
+
+  if (!selmon->sel || (selmon->sel->isfullscreen && lockfullscreen))
+    return;
+
+  int is_master = 0;
+  if (ws->first_stack) {
+    for (i = selmon->clients; i != ws->first_stack; i = i->next)
+      if (i == selmon->sel) {
+	is_master = 1;
+	break;
+      }
+  } else {
+    is_master = 1;
+  }
+
+  if (arg->i > 0) {
+    for (c = selmon->sel->next; c && !ISVISIBLE(c); c = c->next);
+    if (!c || (is_master && c == ws->first_stack)) {
+      c = is_master ? selmon->clients : ws->first_stack;
+      for (; c && !ISVISIBLE(c); c = c->next);
+    }
+  } else {
+    i = is_master ? selmon->clients : ws->first_stack;
+    for (; i != selmon->sel; i = i->next)
+      if (ISVISIBLE(i))
+	c = i;
+    if (!c) {
+      Client *end = is_master ? ws->first_stack : NULL;
+      for (i = i->next; i != end; i = i->next)
+	if (ISVISIBLE(i))
+	  c = i;
+    }
+  }
+
+  if (c && c != selmon->sel) {
+    focus(c);
+    restack(selmon);
+  }
+}
+
+void
 focusstack(const Arg *arg)
 {
 	Client *c = NULL, *i;
@@ -1045,14 +1096,35 @@ focusstack(const Arg *arg)
 			if (ISVISIBLE(i))
 				c = i;
 		if (!c)
-			for (; i; i = i->next)
+			for (i = i->next; i; i = i->next)
 				if (ISVISIBLE(i))
 					c = i;
 	}
-	if (c) {
+	if (c && c != selmon->sel) {
 		focus(c);
 		restack(selmon);
 	}
+}
+
+void
+focus_1st_master(const Arg *arg)
+{
+  Client *c = selmon->clients;
+  if (c && c != selmon->sel) {
+    focus(c);
+    restack(selmon);
+  }
+}
+
+void
+focus_1st_stack(const Arg *arg)
+{
+  const Workspace *ws = WORKSPACE(selmon);
+  Client *c = ws->first_stack;
+  if (c && c != selmon->sel) {
+    focus(ws->first_stack);
+    restack(selmon);
+  }
 }
 
 void
@@ -2248,11 +2320,12 @@ tile(Monitor *m, int left)
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  const Workspace *ws = WORKSPACE(m);
+  Workspace *ws = WORKSPACE(m);
   if (n > ws->v1)
     mw = ws->v1 ? m->ww * ws->vf : 0;
   else
     mw = m->ww;
+
   for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
     if (i < ws->v1) {
       h = (m->wh - my) / (MIN(n, ws->v1) - i);
@@ -2263,6 +2336,8 @@ tile(Monitor *m, int left)
       if (my + HEIGHT(c) < m->wh)
 	my += HEIGHT(c);
     } else {
+      if (!ws->first_stack) ws->first_stack = c;
+
       h = (m->wh - ty) / (n - i);
       if (left)
 	resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
@@ -2294,7 +2369,7 @@ tilelimit(Monitor *m, int left)
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  const Workspace *ws = WORKSPACE(m);
+  Workspace *ws = WORKSPACE(m);
   const char *def = left ? "[]%%" : "%%[]";
   if (n == 1) {
     c = nexttiled(m->clients);
@@ -2306,11 +2381,13 @@ tilelimit(Monitor *m, int left)
     resize(c, m->wx + (left ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
     n--;
 
+    c = nexttiled(c->next);
+    ws->first_stack = c;
+
     const uint cw = m->mw - mw - 2 * c->bw;
     uint each_h = m->wh / n;
     if (each_h > TILE_LIMIT_MIN_HEIGHT) {
-      for (uint i = 0; i < n; i++) {
-	c = nexttiled(c->next);
+      for (uint i = 0; i < n; i++, c = nexttiled(c->next)) {
 	resize(c, m->wx + (left ? mw : 0), m->wy + i * each_h, cw, each_h - 2 * c->bw, 0);
       }
       snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
@@ -2318,8 +2395,7 @@ tilelimit(Monitor *m, int left)
       const uint tile_cnt  = MAX(m->wh / TILE_LIMIT_MIN_HEIGHT, 1);
       each_h = m->wh / tile_cnt;
       const uint limit = tile_cnt - 1;
-      for (uint i = 0; i < n; i++) {
-	c = nexttiled(c->next);
+      for (uint i = 0; i < n; i++, c = nexttiled(c->next)) {
 	resize(c, m->wx + (left ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
       }
       snprintf(m->ltsymbol, sizeof m->ltsymbol, left ? "[]%%%d" : "%%%d[]", n - tile_cnt);
@@ -2349,7 +2425,7 @@ tilev1v2(Monitor *m, int left)
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
-  const Workspace *ws = WORKSPACE(m);
+  Workspace *ws = WORKSPACE(m);
   const char *def = left ? "[]-" : "-[]";
 
   w1 = m->ww * ws->vf;
@@ -2379,6 +2455,8 @@ tilev1v2(Monitor *m, int left)
   }
 
   if (c2) {
+    if (c1) ws->first_stack = c;
+
     cx = (left && c1) ? w1 : 0;
     cw = (c1 ? w2 : m->ww) - 2 * c->bw;
     ch = m->wh / d2;
