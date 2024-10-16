@@ -891,7 +891,7 @@ drawbar(Monitor *m)
       }
 
       if (selmon->sel && bit & selmon->sel->tags) {
- 	drw_setscheme(drw, scheme[SchemeTagged]);
+	drw_setscheme(drw, scheme[SchemeTagged]);
 	const size_t s = 3;
 	const size_t ix = x + w / 2 - 1, iy = bh - s;
 	for (int i = 0; i < s; i++)
@@ -1054,7 +1054,6 @@ focusstack(const Arg *arg)
 		restack(selmon);
 	}
 }
-
 
 void
 focus_1st_visible(uint64_t tags)
