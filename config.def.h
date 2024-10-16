@@ -42,7 +42,8 @@ static const char *colors[][3]      = {
   [SchemeValue1]   = { col_nmaster,  col_bg3,   col_bdr2 }, /* 0x23 */
   [SchemeValue2]   = { col_mfactor,  col_bg3,   col_bdr2 }, /* 0x24 */
   [SchemeValue3]   = { col_yellow,   col_bg3,   col_bdr2 }, /* 0x25 */
-  [SchemeTagged]   = { col_gray,     col_bg1,   col_bdr2 }, /* 0x26 */
+  [SchemeValue4]   = { col_green,    col_bg3,   col_bdr2 }, /* 0x25 */
+  [SchemeTagged]   = { col_cyan1,   col_gray,   col_bdr2 }, /* 0x26 */
   [SchemeOverflow] = { col_fg1,      col_bg2,   col_bdr2 }, /* 0x27 */
                      { col_yellow,   col_bg2,   col_bdr2 }, /* 0x28 */
                      { col_green,    col_bg2,   col_bdr2 }, /* 0x29 */
@@ -66,30 +67,32 @@ static const Rule rules[] = {
    *	WM_CLASS(STRING) = instance, class
    *	WM_NAME(STRING) = title
    */
-  /* class      instance    title       tag index     isfloating   monitor */
-  { "Gimp",     NULL,       NULL,       -1,            1,           -1 },
+  /* class      instance    title       tags      isfloating   monitor */
+  { "Gimp",     NULL,       NULL,       0,        1,           -1 },
 };
 
 /* layout(s) */
-static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
-static const int nmaster     = 1;    /* number of clients in master area */
+static const float vf_init   = 0.55; /* float variable [0.05..0.95] */
+static const uint v1_init     = 1;    /* interger variable 1 */
+static const uint v2_init     = 1;    /* interger variable 2 */
 static const int resizehints = 1;    /* 1 means respect size hints in tiled resizals */
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 
 static const Layout layouts[] = {
   /* symbol   arrange function */
-  { "[]=",    tileright },        /*  0 */
-  { "=[]",    tileleft },         /*  1 */
-  { "|+|",    gridnmaster },      /*  2 */
-  { "#",      grid },             /*  3 */
-  { "+#",     gridtileright },    /*  4 */
-  { "#+",     gridtileleft },     /*  5 */
-  { "[]-",    tilelimitright },   /*  6 */
-  { "-[]",    tilelimitleft },    /*  7 */
-  { "[]%",    tilelimit2right },  /*  8 */
-  { "%[]",    tilelimit2left },   /*  9 */
-  { "(0,0)",  xyzero },           /* 10 */
-  { "><",     stackcenter },      /* 11 */
+  // === 0 - 3
+  { "[]=",    tileleft },
+  { "=[]",    tileright },
+  { "[M]",    monocle },
+  { "|G|",    gridv1v2 },
+  // === 4 - 7
+  { "[]-",    tilev1v2left },
+  { "-[]",    tilev1v2right },
+  { "(0,0)",  xyzero },
+  { "><",     stackcenter },
+  // === 8 - 11
+  { "[]%",    tilelimitright },
+  { "%[]",    tilelimitleft },
 };
 
 /* key definitions */
@@ -99,6 +102,7 @@ static const Layout layouts[] = {
 #define TAGKEYS(KEY,TAG) \
   { MODKEY,                       KEY, toggleview,      {.ui = 1ULL << TAG} }, \
   { MODKEY|ShiftMask,             KEY, tag,             {.ui = 1ULL << TAG} }, \
+  { MODKEY|AltMask,               KEY, toggletag,       {.ui = 1ULL << TAG} }, \
   { MODKEY|ControlMask,           KEY, switchworkspace, {.i = TAG} }
 
 /* commands */
@@ -120,33 +124,35 @@ static Key keys[] = {
   { MODKEY|AltMask,               XK_Delete,       killclient,      {0} },
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
+  { MODKEY|ControlMask,           XK_Return,       togglespawnfloating,  {0} },
   { MODKEY,                       XK_Home,         togglebar,       {0} },
   { MODKEY,                       XK_Left,         setlayout,       {.ui = 0 } },
   { MODKEY,                       XK_Right,        setlayout,       {.ui = 1 } },
-  { MODKEY,                       XK_Up,           setlayout,       {.ui = 8 } },
-  { MODKEY,                       XK_Down,         setlayout,       {.ui = 9 } },
+  { MODKEY,                       XK_Up,           setlayout,       {.ui = 2 } },
+  { MODKEY,                       XK_Down,         setlayout,       {.ui = 3 } },
   { MODKEY|ShiftMask,             XK_Left,         setlayout,       {.ui = 4 } },
   { MODKEY|ShiftMask,             XK_Right,        setlayout,       {.ui = 5 } },
   { MODKEY|ShiftMask,             XK_Up,           setlayout,       {.ui = 6 } },
   { MODKEY|ShiftMask,             XK_Down,         setlayout,       {.ui = 7 } },
-  { MODKEY|AltMask,               XK_Left,         setlayout,       {.ui = 10 } },
-  { MODKEY|AltMask,               XK_Right,        setlayout,       {.ui = 11 } },
-  { MODKEY|AltMask,               XK_Up,           setlayout,       {.ui = 2 } },
-  { MODKEY|AltMask,               XK_Down,         setlayout,       {.ui = 3 } },
+  { MODKEY|AltMask,               XK_Left,         setlayout,       {.ui = 8 } },
+  { MODKEY|AltMask,               XK_Right,        setlayout,       {.ui = 9 } },
+  { MODKEY|AltMask,               XK_Up,           setlayout,       {.ui = 10 } },
+  { MODKEY|AltMask,               XK_Down,         setlayout,       {.ui = 11 } },
   { MODKEY,                       XK_Tab,          toggleview,      {.ui = 0 } },
+  { MODKEY|AltMask,               XK_Tab,          tag,             {.ui = 0 } },
   { MODKEY|ShiftMask,             XK_Tab,          viewclients,     {0} },
   { MODKEY|ControlMask,           XK_Tab,          switchworkspace, {.i = -1 } },
-  { MODKEY,                       XK_h,            setmfact,        {.f = -0.05 } },
+  { MODKEY,                       XK_h,            incvf,           {.f = -0.05 } },
   { MODKEY,                       XK_j,            focusstack,      {.i = +1 } },
   { MODKEY,                       XK_k,            focusstack,      {.i = -1 } },
-  { MODKEY,                       XK_l,            setmfact,        {.f = +0.05 } },
-  { MODKEY|AltMask,               XK_h,            setmfact,        {.f = -0.01 } },
+  { MODKEY,                       XK_l,            incvf,           {.f = +0.05 } },
+  { MODKEY|AltMask,               XK_h,            incvf,           {.f = -0.01 } },
   { MODKEY|AltMask,               XK_h,            snapandcenter_x, {.i = -1 } },
-  { MODKEY|AltMask,               XK_j,            incnmaster,      {.i = -1 } },
+  { MODKEY|AltMask,               XK_j,            incv1,           {.i = -1 } },
   { MODKEY|AltMask,               XK_j,            snapandcenter_y, {.i = +1 } },
-  { MODKEY|AltMask,               XK_k,            incnmaster,      {.i = +1 } },
+  { MODKEY|AltMask,               XK_k,            incv1,           {.i = +1 } },
   { MODKEY|AltMask,               XK_k,            snapandcenter_y, {.i = -1 } },
-  { MODKEY|AltMask,               XK_l,            setmfact,        {.f = +0.01 } },
+  { MODKEY|AltMask,               XK_l,            incvf,           {.f = +0.01 } },
   { MODKEY|AltMask,               XK_l,            snapandcenter_x, {.i = +1 } },
   { MODKEY|ShiftMask,             XK_h,            moveclient_x,    {.f = -0.05 } },
   { MODKEY|ShiftMask,             XK_j,            movestack,       {.i = +1 } },
@@ -155,7 +161,9 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_k,            moveclient_y,    {.f = -0.05 } },
   { MODKEY|ShiftMask,             XK_l,            moveclient_x,    {.f = +0.05 } },
   { MODKEY|ControlMask,           XK_h,            moveclient_w,    {.f = -0.05 } },
+  { MODKEY|ControlMask,           XK_j,            incv2,           {.i = -1 } },
   { MODKEY|ControlMask,           XK_j,            moveclient_h,    {.f = +0.05 } },
+  { MODKEY|ControlMask,           XK_k,            incv2,           {.i = +1 } },
   { MODKEY|ControlMask,           XK_k,            moveclient_h,    {.f = -0.05 } },
   { MODKEY|ControlMask,           XK_l,            moveclient_w,    {.f = +0.05 } },
   { MODKEY|AltMask|ShiftMask,     XK_h,            moveclient_w,    {.f = +1.0 } },

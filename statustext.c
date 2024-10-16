@@ -44,11 +44,11 @@ render_statustext(void)
   strftime(ldate, sizeof(ldate), "%F (%a)", tm);
   strftime(ltime, sizeof(ltime), "%T", tm);
 
-  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "EST: %c%c%s%c%c  ", 1, 0x28, est, 1, 0x20);
-  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "UTC: %c%c%s%c%c  ", 1, 0x29, utc, 1, 0x20);
-  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "JST: %c%c%s%c%c  ", 1, 0x2A, jst, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "EST: %c%c%s%c%c  ", 1, 0x29, est, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "UTC: %c%c%s%c%c  ", 1, 0x2A, utc, 1, 0x20);
+  p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "JST: %c%c%s%c%c  ", 1, 0x2B, jst, 1, 0x20);
   p += snprintf(p, sizeof(dtbuf) - (p - dtbuf), "%s  %c%c%s%c%c [%d]",
-		ldate, 1, 0x2B, ltime, 1, 0x20, tm->tm_year + 1900 + 543);
+		ldate, 1, 0x2C, ltime, 1, 0x20, tm->tm_year + 1900 + 543);
 
   const size_t dt_len = p - dtbuf + 1;
   p = statustext;

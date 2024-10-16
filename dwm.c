@@ -22,7 +22,6 @@
  */
 #include <errno.h>
 #include <locale.h>
-#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -73,6 +72,7 @@ enum { /* color schemes */
   SchemeValue1,
   SchemeValue2,
   SchemeValue3,
+  SchemeValue4,
   SchemeTagged,
   SchemeOverflow,
 };
@@ -141,8 +141,9 @@ typedef struct {
   uint64_t own_tag;
   uint64_t tags;
   const Layout *layout;
-  float mfact;
-  int nmaster;
+  int v1;
+  int v2;
+  float vf;
   uint64_t last_toggled_tags;
   int spawn_floating;
 } Workspace;
@@ -181,13 +182,11 @@ static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
 static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
-static void grid(Monitor *m);
-static void gridnmaster(Monitor *m);
-void gridtile(Monitor *m, int right);
-static void gridtileleft(Monitor *m);
-static void gridtileright(Monitor *m);
+static void gridv1v2(Monitor *m);
 Client* grid_resize(Monitor *m, Client *c, uint cnt, uint x, uint y, uint w, uint h);
-static void incnmaster(const Arg *arg);
+static void incv1(const Arg *arg);
+static void incv2(const Arg *arg);
+static void incvf(const Arg *arg);
 void justfocus(Client *c);
 static void keypress(XEvent *e);
 static void killclient(const Arg *arg);
@@ -195,6 +194,7 @@ static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
 static void maximize(const Arg *arg);
+static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 void moveclient(Client *, int x, int y, int w, int c);
 static void moveclient_x(const Arg *arg);
@@ -221,7 +221,6 @@ static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(const Arg *arg);
-static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
@@ -236,8 +235,9 @@ static void tileleft(Monitor *m);
 static void tileright(Monitor *m);
 static void tilelimitleft(Monitor *m);
 static void tilelimitright(Monitor *m);
-static void tilelimit2left(Monitor *m);
-static void tilelimit2right(Monitor *m);
+void tilev1v2(Monitor *m, int left);
+static void tilev1v2left(Monitor *m);
+static void tilev1v2right(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void togglespawnfloating(const Arg *arg);
@@ -700,8 +700,9 @@ createmon(void)
 	  Workspace *ws = &m->workspaces[i];
 	  ws->layout = &layouts[0];
 	  ws->own_tag = ws->tags = 1ULL << i;
-	  ws->mfact = mfact;
-	  ws->nmaster = nmaster;
+	  ws->v1 = v1_init;
+	  ws->v2 = v2_init;
+	  ws->vf = vf_init;
 	  ws->last_toggled_tags = 0;
 	  ws->spawn_floating = 0;
 	}
@@ -845,20 +846,26 @@ drawbar(Monitor *m)
   {
     char buf[32];
 
-    snprintf(buf, sizeof(buf), "%d", ws->nmaster);
+    snprintf(buf, sizeof(buf), "%d", ws->v1);
     w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeValue1]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
     x += w;
 
-    snprintf(buf, sizeof(buf), "%.2f", ws->mfact);
-    w = TEXTW_(buf) + lrpad / 2;
+    snprintf(buf, sizeof(buf), "%d", ws->v2);
+    w = TEXTW(buf);
     drw_setscheme(drw, scheme[SchemeValue2]);
+    drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
+    x += w;
+
+    snprintf(buf, sizeof(buf), "%.2f", ws->vf);
+    w = TEXTW_(buf) + lrpad / 2;
+    drw_setscheme(drw, scheme[SchemeValue3]);
     drw_text(drw, x, 0, w, bh, 0, buf, 0);
     x += w;
 
     w = TEXTW_(m->ltsymbol) + lrpad / 2;
-    drw_setscheme(drw, scheme[SchemeValue3]);
+    drw_setscheme(drw, scheme[SchemeValue4]);
     drw_text(drw, x, 0, w, bh, 0, m->ltsymbol, 0);
     x += w;
   }
@@ -888,7 +895,7 @@ drawbar(Monitor *m)
 	const size_t s = 3;
 	const size_t ix = x + w / 2 - 1, iy = bh - s;
 	for (int i = 0; i < s; i++)
-	  drw_rect(drw, ix - i, iy + i, 1 + i * 2, 1, 1, view_on);
+	  drw_rect(drw, ix - i, iy + i, 1 + i * 2, 1, 1, !view_on);
       }
 
       x += w;
@@ -1184,32 +1191,22 @@ grabkeys(void)
 }
 
 void
-grid(Monitor *m) {
-  uint n;
-  Client *c;
-
-  for(n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
-  if (!n) return;
-
-  grid_resize(m, nexttiled(m->clients), n, 0, 0, m->ww, m->wh);
-}
-
-void
-gridnmaster(Monitor *m)
+gridv1v2(Monitor *m)
 {
   uint n = 0;
   Client *c;
 
   const Workspace *ws = WORKSPACE(m);
-  const uint grid_cnt = MAX(ws->nmaster, 1);
-  const uint cell_cnt = grid_cnt * grid_cnt;
-  const uint gw = m->ww / grid_cnt;
-  const uint gh = m->wh / grid_cnt;
+  const uint grid_x = MAX(ws->v1, 1);
+  const uint grid_y = MAX(ws->v2, 1);
+  const uint cell_cnt = grid_x * grid_y;
+  const uint gw = m->ww / grid_x;
+  const uint gh = m->wh / grid_y;
 
   for (c = nexttiled(m->clients); c; c = nexttiled(c->next), n++) {
     uint a = n % cell_cnt;
-    uint row = a / grid_cnt;
-    uint col = a % grid_cnt;
+    uint col = a % grid_x;
+    uint row = a / grid_x;
 
     resize(c, col * gw, row * gh, gw - 2 * c->bw, gh - 2 * c->bw, 0);
   }
@@ -1222,105 +1219,37 @@ gridnmaster(Monitor *m)
 }
 
 void
-gridtile(Monitor *m, int right)
-{
-  uint n, mw, m_cnt;
-  Client *c;
-
-  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
-  if (!n) return;
-
-  const Workspace *ws = WORKSPACE(m);
-  if (!ws->nmaster) {
-    mw = m_cnt = 0;
-  } else if (n > ws->nmaster) {
-    mw = m->ww * ws->mfact;
-    m_cnt = ws->nmaster;
-  } else {
-    mw = m->ww;
-    m_cnt = n;
-  }
-
-  c = nexttiled(m->clients);
-  if (ws->nmaster) {
-    if (n > ws->nmaster) {
-      mw = m->ww * ws->mfact;
-      m_cnt = ws->nmaster;
-    } else {
-      mw = m->ww;
-      m_cnt = n;
-    }
-    c = grid_resize(m, c, m_cnt, right ? 0 : m->ww - mw, 0, mw, m->wh);
-  } else {
-    mw = m_cnt = 0;
-  }
-
-  if (n > m_cnt) {
-    grid_resize(m, c, n - m_cnt, right ? mw : 0, 0, m->ww - mw, m->wh);
-  }
-}
-
-void
-gridtileleft(Monitor *m)
-{
-  gridtile(m, 0);
-}
-
-void
-gridtileright(Monitor *m)
-{
-  gridtile(m, 1);
-}
-
-Client*
-grid_resize(Monitor *m, Client *c, uint cnt, uint x, uint y, uint w, uint h)
-{
-  if (!c) return c;
-
-  const uint g = ceil(sqrt(cnt));
-  const uint q = cnt / g;
-  const uint r = cnt % g;
-  const uint e = g - r;
-
-  const uint g_fixed = (w > h ? w : h) / g;
-
-  uint col_i = 0, row_i = 0;
-  uint cel_cnt = q, g_inflatable = (w > h ? h : w) / q;
-  for (uint i = 0; c && i < cnt; c = nexttiled(c->next), i++, row_i++) {
-    if (row_i == cel_cnt) {
-      row_i = 0;
-      col_i++;
-      if (col_i >= e) {
-	cel_cnt = q + 1;
-	g_inflatable = (w > h ? h : w) / cel_cnt;
-      }
-    }
-
-    uint cx, cy;
-    if (w > h) {
-      cx = col_i * g_fixed;
-      cy = row_i * g_inflatable;
-    } else {
-      cx = row_i * g_inflatable;
-      cy = col_i * g_fixed;
-    }
-
-    resize(c, cx + x, cy + y,
-	   (w > h ? g_fixed : g_inflatable) - 2 * c->bw,
-	   (w > h ? g_inflatable : g_fixed) - 2 * c->bw, 0);
-  }
-
-  return c;
-}
-
-void
-incnmaster(const Arg *arg)
+incv1(const Arg *arg)
 {
 	if (selmon->sel && selmon->sel->isfloating) return;
 
 	Workspace *ws = WORKSPACE(selmon);
-	ws->nmaster = MAX(ws->nmaster + arg->i, 0);
+	ws->v1 = MAX(ws->v1 + arg->i, 0);
 	arrange(selmon);
+}
+
+void
+incv2(const Arg *arg)
+{
+	if (selmon->sel && selmon->sel->isfloating) return;
+
+	Workspace *ws = WORKSPACE(selmon);
+	ws->v2 = MAX(ws->v2 + arg->i, 0);
+	arrange(selmon);
+}
+
+
+void
+incvf(const Arg *arg)
+{
+  if (selmon->sel && selmon->sel->isfloating) return;
+
+  Workspace *ws = WORKSPACE(selmon);
+  float f = arg->f + ws->vf;
+  if (f < 0.05 || f > 0.95) return;
+
+  ws->vf = f;
+  arrange(selmon);
 }
 
 #ifdef XINERAMA
@@ -1473,6 +1402,21 @@ maximize(const Arg *arg)
     c->ismaximized = 1;
   }
 
+}
+
+void
+monocle(Monitor *m)
+{
+	unsigned int n = 0;
+	Client *c;
+
+	for (c = m->clients; c; c = c->next)
+		if (ISVISIBLE(c))
+			n++;
+	if (n > 0) /* override layout symbol */
+		snprintf(m->ltsymbol, sizeof m->ltsymbol, "[%d]", n);
+	for (c = nexttiled(m->clients); c; c = nexttiled(c->next))
+		resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
 }
 
 void
@@ -2076,22 +2020,6 @@ setlayout(const Arg *arg)
 }
 
 void
-setmfact(const Arg *arg)
-{
-	float f;
-	if (selmon->sel && selmon->sel->isfloating) return;
-
-	if (!arg || !WORKSPACE(selmon)->layout->arrange)
-		return;
-	Workspace *ws = WORKSPACE(selmon);
-	f = arg->f < 1.0 ? arg->f + ws->mfact : arg->f - 1.0;
-	if (f < 0.05 || f > 0.95)
-		return;
-	ws->mfact = f;
-	arrange(selmon);
-}
-
-void
 setup(void)
 {
 	int i;
@@ -2313,7 +2241,7 @@ tag(const Arg *arg)
 }
 
 void
-tile(Monitor *m, int right)
+tile(Monitor *m, int left)
 {
   uint i, n, h, mw, my, ty;
   Client *c;
@@ -2322,14 +2250,14 @@ tile(Monitor *m, int right)
   if (!n) return;
 
   const Workspace *ws = WORKSPACE(m);
-  if (n > ws->nmaster)
-    mw = ws->nmaster ? m->ww * ws->mfact : 0;
+  if (n > ws->v1)
+    mw = ws->v1 ? m->ww * ws->vf : 0;
   else
     mw = m->ww;
   for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
-    if (i < ws->nmaster) {
-      h = (m->wh - my) / (MIN(n, ws->nmaster) - i);
-      if (right)
+    if (i < ws->v1) {
+      h = (m->wh - my) / (MIN(n, ws->v1) - i);
+      if (left)
 	resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
       else
 	resize(c, m->wx + m->ww - mw, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
@@ -2337,7 +2265,7 @@ tile(Monitor *m, int right)
 	my += HEIGHT(c);
     } else {
       h = (m->wh - ty) / (n - i);
-      if (right)
+      if (left)
 	resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
       else
 	resize(c, m->wx, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
@@ -2349,66 +2277,17 @@ tile(Monitor *m, int right)
 void
 tileleft(Monitor *m)
 {
-  tile(m, 0);
+  tile(m, 1);
 }
 
 void
 tileright(Monitor *m)
 {
-  tile(m, 1);
+  tile(m, 0);
 }
 
 void
-tilelimit(Monitor *m, int right)
-{
-  uint i, n, mw;
-  Client *c;
-
-  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
-  if (!n) return;
-
-  const Workspace *ws = WORKSPACE(m);
-  const char *def = right ? "[]-" : "-[]";
-  if (n == 1) {
-    c = nexttiled(m->clients);
-    resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
-    snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
-  } else {
-    mw = m->ww * ws->mfact;
-    c = nexttiled(m->clients);
-    resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
-    n--;
-
-    const uint tile_cnt = MIN(n, MAX(ws->nmaster, 1));
-    const uint cw = m->mw - mw - 2 * c->bw;
-    const uint each_h = m->wh / tile_cnt;
-    const uint limit = tile_cnt - 1;
-    for (i = 0; i < n; i++) {
-      c = nexttiled(c->next);
-      resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
-    }
-
-    if (n > tile_cnt)
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]-/%d" : "-/%d[]", n - tile_cnt);
-    else
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
-  }
-}
-
-void
-tilelimitleft(Monitor *m)
-{
-  tilelimit(m, 0);
-}
-
-void
-tilelimitright(Monitor *m)
-{
-  tilelimit(m, 1);
-}
-
-void
-tilelimit2(Monitor *m, int right)
+tilelimit(Monitor *m, int left)
 {
   uint n;
   Client *c;
@@ -2417,15 +2296,15 @@ tilelimit2(Monitor *m, int right)
   if (!n) return;
 
   const Workspace *ws = WORKSPACE(m);
-  const char *def = right ? "[]%%" : "%%[]";
+  const char *def = left ? "[]%%" : "%%[]";
   if (n == 1) {
     c = nexttiled(m->clients);
     resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
     snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
   } else {
-    uint mw = m->ww * ws->mfact;
+    uint mw = m->ww * ws->vf;
     c = nexttiled(m->clients);
-    resize(c, m->wx + (right ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
+    resize(c, m->wx + (left ? 0 : m->ww - mw), m->wy, mw - 2 * c->bw, m->wh - 2 * c->bw, 0);
     n--;
 
     const uint cw = m->mw - mw - 2 * c->bw;
@@ -2433,7 +2312,7 @@ tilelimit2(Monitor *m, int right)
     if (each_h > TILE_LIMIT_MIN_HEIGHT) {
       for (uint i = 0; i < n; i++) {
 	c = nexttiled(c->next);
-	resize(c, m->wx + (right ? mw : 0), m->wy + i * each_h, cw, each_h - 2 * c->bw, 0);
+	resize(c, m->wx + (left ? mw : 0), m->wy + i * each_h, cw, each_h - 2 * c->bw, 0);
       }
       snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
     } else {
@@ -2442,23 +2321,92 @@ tilelimit2(Monitor *m, int right)
       const uint limit = tile_cnt - 1;
       for (uint i = 0; i < n; i++) {
 	c = nexttiled(c->next);
-	resize(c, m->wx + (right ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
+	resize(c, m->wx + (left ? mw : 0), m->wy + MIN(i, limit) * each_h, cw, each_h - 2 * c->bw, 0);
       }
-      snprintf(m->ltsymbol, sizeof m->ltsymbol, right ? "[]%%%d" : "%%%d[]", n - tile_cnt);
+      snprintf(m->ltsymbol, sizeof m->ltsymbol, left ? "[]%%%d" : "%%%d[]", n - tile_cnt);
     }
   }
 }
 
 void
-tilelimit2left(Monitor *m)
+tilelimitleft(Monitor *m)
 {
-  tilelimit2(m, 0);
+  tilelimit(m, 1);
 }
 
 void
-tilelimit2right(Monitor *m)
+tilelimitright(Monitor *m)
 {
-  tilelimit2(m, 1);
+  tilelimit(m, 0);
+}
+
+void
+tilev1v2(Monitor *m, int left)
+{
+  uint i, n, cx, cw, ch, w1, w2, c1, c2, d1, d2;
+  int limit;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (!n) return;
+
+  const Workspace *ws = WORKSPACE(m);
+  const char *def = left ? "[]-" : "-[]";
+
+  w1 = m->ww * ws->vf;
+  w2 = m->ww - w1;
+
+  if (ws->v1 == 0 || ws->v2 == 0 || ws->v1 >= n) {
+    c1 = 0;
+    c2 = n;
+    d1 = 0;
+    d2 = MIN(n, MAX(1, MAX(ws->v1, ws->v2)));
+  } else {
+    c1 = ws->v1;
+    c2 = n - c1;
+    d1 = ws->v1;
+    d2 = MIN(c2, ws->v2);
+  }
+
+  c = nexttiled(m->clients);
+
+  if (c1) {
+    cx = left ? 0 : w2;
+    cw = w1 - 2 * c->bw;
+    ch = m->wh / d1;
+    for (i = 0; c && i < c1; i++, c = nexttiled(c->next)) {
+      resize(c, m->wx + cx, m->wy + i * ch, cw, ch - 2 * c->bw, 0);
+    }
+  }
+
+  if (c2) {
+    cx = (left && c1) ? w1 : 0;
+    cw = (c1 ? w2 : m->ww) - 2 * c->bw;
+    ch = m->wh / d2;
+    limit = d2 - 1;
+    for (i = 0; c && i < c2; i++, c = nexttiled(c->next)) {
+      resize(c, m->wx + cx, m->wy + MIN(i, limit) * ch, cw, ch - 2 * c->bw, 0);
+    }
+  }
+
+  const int behinds = n - d1 - d2;
+  if (behinds)
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, left ? "[]-/%d" : "-/%d[]", behinds);
+  else
+    snprintf(m->ltsymbol, sizeof m->ltsymbol, def);
+
+}
+
+void
+tilev1v2left(Monitor *m)
+{
+  tilev1v2(m, 1);
+}
+
+void
+tilev1v2right(Monitor *m)
+{
+  tilev1v2(m, 0);
 }
 
 void
