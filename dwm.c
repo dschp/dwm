@@ -2313,38 +2313,43 @@ tag(const Arg *arg)
 void
 tile(Monitor *m, int left)
 {
-  uint i, n, h, mw, my, ty;
+  uint i, n;
   Client *c;
 
   for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
   if (!n) return;
 
   Workspace *ws = WORKSPACE(m);
-  if (n > ws->v1)
-    mw = ws->v1 ? m->ww * ws->vf : 0;
-  else
-    mw = m->ww;
+  const uint mw =
+    n <= ws->v1 ? m->ww
+    : ws->v1 ? m->ww * ws->vf : 0;
 
-  for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
-    if (i < ws->v1) {
-      h = (m->wh - my) / (MIN(n, ws->v1) - i);
-      if (left)
-	resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
-      else
-	resize(c, m->wx + m->ww - mw, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
-      if (my + HEIGHT(c) < m->wh)
-	my += HEIGHT(c);
-    } else {
-      if (!ws->first_stack) ws->first_stack = c;
+  c = nexttiled(m->clients);
 
-      h = (m->wh - ty) / (n - i);
-      if (left)
-	resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-      else
-	resize(c, m->wx, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-      if (ty + HEIGHT(c) < m->wh)
-	ty += HEIGHT(c);
+  const uint w1 = mw - (2*c->bw);
+  const uint w2 = m->ww - mw - (2*c->bw);
+  const uint x1 = m->wx + (left ? 0 : m->ww - mw);
+  const uint x2 = m->wx + (left ? mw : 0);
+  const uint m_cnt = MIN(n, ws->v1);
+  const uint s_cnt = n - m_cnt;
+
+  if (m_cnt > 0) {
+    const uint mh = m->wh / m_cnt;
+    const uint r = m->wh - mh * m_cnt;
+    for (i = 0; i < m_cnt; i++, c = nexttiled(c->next)) {
+      resize(c, x1, m->wy + i * mh, w1,
+	     mh + (i == m_cnt - 1 ? r : 0) - (2*c->bw), 0);
     }
+  }
+  if (s_cnt) {
+    ws->first_stack = c;
+    const uint sh = m->wh / s_cnt;
+    const uint r = m->wh - sh * s_cnt;
+    for (i = 0; i < s_cnt; i++, c = nexttiled(c->next)) {
+      resize(c, x2, m->wy + i * sh, w2,
+	     sh + (s_cnt - i == 1 ? r : 0) - (2*c->bw), 0);
+    }
+  }
 }
 
 void
