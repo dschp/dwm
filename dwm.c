@@ -1140,9 +1140,8 @@ focus_1st_visible(uint64_t tags)
       }
     }
   }
-  if (tiled_candidate) {
-    focus(tiled_candidate);
-  }
+
+  focus(tiled_candidate);
 }
 
 Atom
@@ -2303,11 +2302,11 @@ tag(const Arg *arg)
 
   selmon->sel->tags = arg_tag;
 
-  if (!(arg_tag & ws->tags)) {
+  if (arg_tag & ws->tags) {
+    drawbar(selmon);
+  } else {
     focus_1st_visible(ws->tags);
     arrange(selmon);
-  } else {
-    drawbar(selmon);
   }
 }
 
