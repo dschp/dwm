@@ -1038,10 +1038,10 @@ focusin(XEvent *e)
 void
 focuscycle(const Arg *arg)
 {
-  Client *c = NULL, *i;
+  Client *c = NULL, *i = selmon->sel;
   const Workspace *ws = WORKSPACE(selmon);
 
-  if (!selmon->sel || (selmon->sel->isfullscreen && lockfullscreen))
+  if (!i || i->isfloating || (i->isfullscreen && lockfullscreen))
     return;
 
   int is_master = 0;
