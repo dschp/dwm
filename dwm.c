@@ -813,6 +813,8 @@ drawbar(Monitor *m)
         *p2++ = *p1++;
       }
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
   }
 
   int cnt_all = 0, cnt_vis = 0;
@@ -959,7 +961,6 @@ drawbar(Monitor *m)
   }
 
   drw_map(drw, m->barwin, 0, 0, m->ww, bh);
-  clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
 }
 
 void
@@ -1923,33 +1924,35 @@ run(void)
     FD_ZERO(&in_fds);
     FD_SET(x11_fd, &in_fds);
 
-    clock_gettime(CLOCK_MONOTONIC, &timer);
+    if (selmon->showbar) {
+      clock_gettime(CLOCK_MONOTONIC, &timer);
 
-    timer.tv_sec -= ts_last_drawbar.tv_sec;
-    timer.tv_nsec -= ts_last_drawbar.tv_nsec;
-    if (timer.tv_nsec < 0) {
-      timer.tv_sec--;
-      timer.tv_nsec += 1.0e9;
+      timer.tv_sec -= ts_last_drawbar.tv_sec;
+      timer.tv_nsec -= ts_last_drawbar.tv_nsec;
+      if (timer.tv_nsec < 0) {
+	timer.tv_sec--;
+	timer.tv_nsec += 1.0e9;
+      }
+      if (timer.tv_sec > 0) {
+	drawbar(selmon);
+
+	timer.tv_sec = 1;
+	timer.tv_nsec = 0;
+      } else {
+	timer.tv_nsec = 1.0e9 - timer.tv_nsec;
+      }
     }
-    if (timer.tv_sec > 0) {
-      drawbar(selmon);
 
-      timer.tv_sec = 1;
-      timer.tv_nsec = 0;
-    } else {
-      timer.tv_nsec = 1.0e9 - timer.tv_nsec;
-    }
-
-    int num_ready_fds = pselect(x11_fd + 1, &in_fds, NULL, NULL, &timer, NULL);
+    int num_ready_fds = pselect(x11_fd + 1, &in_fds, NULL, NULL,
+				selmon->showbar ? &timer : NULL, NULL);
     if (num_ready_fds < 0) {
       printf("An error occured!\n");
       break;
     } else if (num_ready_fds > 0) {
-      while(XPending(dpy)) {
+      while(XPending(dpy))
 	if (!XNextEvent(dpy, &ev))
 	  if (handler[ev.type])
 	    handler[ev.type](&ev);
-      }
     }
   }
 }
