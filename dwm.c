@@ -74,6 +74,7 @@ enum { /* color schemes */
   SchemeValue3,
   SchemeValue4,
   SchemeTagged,
+  SchemeSelIdx,
   SchemeOverflow,
 };
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
@@ -817,10 +818,11 @@ drawbar(Monitor *m)
     clock_gettime(CLOCK_MONOTONIC, &ts_last_drawbar);
   }
 
-  int cnt_all = 0, cnt_vis = 0;
+  int cnt_all = 0, cnt_vis = 0, sel_idx = 0;
   for (c = m->clients; c; c = c->next) {
     cnt_all++;
     if (ISVISIBLE(c)) cnt_vis++;
+    if (c == m->sel) sel_idx = cnt_vis;
 
     occ |= c->tags;
     if (c->isurgent) urg |= c->tags;
@@ -917,46 +919,31 @@ drawbar(Monitor *m)
   } else if (cnt_vis == 0) {
     drw_setscheme(drw, scheme[SchemeNorm]);
     drw_rect(drw, x, 0, w, bh, 1, 1);
-  } else  {
-    uint end_x = x_limit;
-    uint each_w = w / cnt_vis;
-    uint drawable_cnt = cnt_vis;
-    if (each_w < BAR_CLIENT_MIN_WIDTH) {
-      drw_setscheme(drw, scheme[SchemeNorm]);
-      drw_rect(drw, ox, 0, 1, bh, 1, 1);
+  } else if ((c = m->sel)) {
+    char buf[20];
+    snprintf(buf, sizeof buf, "%d", sel_idx);
+    uint iw = TEXTW(buf) + 10;
+    uint cw = MIN(MAX(TEXTW(c->name), BAR_CLIENT_MIN_WIDTH), w);
+
+    if (iw + cw < w) {
+      drw_setscheme(drw, scheme[SchemeSelIdx]);
+      drw_text(drw, x, 0, iw, bh, lrpad / 2 + 5, buf, 0);
+      x += iw;
+
+      drw_setscheme(drw, scheme[SchemeSel]);
+      drw_text(drw, x, 0, cw, bh, lrpad / 2, c->name, 1);
+      if (c->isfloating)
+	drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, 1);
+
+      x += cw;
+    } else {
       drw_setscheme(drw, scheme[SchemeOverflow]);
       drw_text(drw, ox + 1, 0, ow - 1, bh, lrpad / 2, overflow, 1);
-
-      end_x -= ow;
-      w -= ow;
-      drawable_cnt = MAX(w / BAR_CLIENT_MIN_WIDTH, 1);
-      each_w = w / drawable_cnt;
     }
 
-    for (c = m->clients; drawable_cnt > 0; c = c->next) {
-      if (!ISVISIBLE(c)) continue;
-
-      drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
-
-      uint client_w = each_w;
-      if (cnt_vis == 1) {
-	client_w = MIN(MAX(TEXTW(c->name), BAR_CLIENT_MAX_WIDTH), w);
-      } else if (drawable_cnt == 1) {
-	client_w = end_x - x;
-      }
-
-      drw_text(drw, x, 0, client_w, bh, lrpad / 2, c->name, c == m->sel);
-      if (c->isfloating)
-	drw_rect(drw, x + boxs, boxs, boxw, boxw,
-		 c == m->sel || c->isfixed, c == m->sel);
-
-      x += client_w;
-      drawable_cnt--;
-    }
-
-    if (x < end_x) {
+    if (x < x_limit) {
       drw_setscheme(drw, scheme[SchemeNorm]);
-      drw_rect(drw, x, 0, end_x - x, bh, 1, 1);
+      drw_rect(drw, x, 0, x_limit - x, bh, 1, 1);
     }
   }
 
