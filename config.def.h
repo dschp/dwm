@@ -1,7 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
-#define BAR_CLIENT_MIN_WIDTH 100
-#define BAR_CLIENT_MAX_WIDTH 300
+#define BAR_CLIENT_MIN_WIDTH 200
 #define ENV_STATUS_DIR   "STATUS_DIR"
 #define STATUS_MAX_FILE  10
 #define STATUS_SEP_LEN   sizeof(status_separator) - 1
@@ -18,9 +17,11 @@ static const char *fonts[]          = { "sans-serif:size=7" };
 static const char dmenufont[]       = "sans-serif:size=11";
 static const char col_fg1[]         = "#dddddd";
 static const char col_fg2[]         = "#eeeeee";
+static const char col_fg3[]         = "#ffffff";
 static const char col_bg1[]         = "#000000";
 static const char col_bg2[]         = "#191919";
 static const char col_bg3[]         = "#2a2a2a";
+static const char col_bg4[]         = "#3f3f3f";
 static const char col_bdr1[]        = "#0090ff";
 static const char col_bdr2[]        = "#242424";
 static const char col_cyan1[]       = "#00bbff";
@@ -44,7 +45,8 @@ static const char *colors[][3]      = {
   [SchemeValue3]   = { col_green,    col_bg3,   col_bdr2 }, /* 0x25 */
   [SchemeValue4]   = { col_yellow,   col_bg3,   col_bdr2 }, /* 0x25 */
   [SchemeTagged]   = { col_cyan1,   col_gray,   col_bdr2 }, /* 0x26 */
-  [SchemeOverflow] = { col_fg1,      col_bg2,   col_bdr2 }, /* 0x27 */
+  [SchemeSelIdx]   = { col_fg2,      col_bg3,   col_bdr2 }, /* 0x27 */
+  [SchemeOverflow] = { col_fg3,      col_bg4,   col_bdr2 }, /* 0x27 */
                      { col_yellow,   col_bg2,   col_bdr2 }, /* 0x28 */
                      { col_green,    col_bg2,   col_bdr2 }, /* 0x29 */
                      { col_red,      col_bg2,   col_bdr2 }, /* 0x2A */
@@ -125,6 +127,7 @@ static Key keys[] = {
   { MODKEY,                       XK_Return,       spawn,           {.v = dmenucmd } },
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
   { MODKEY|ControlMask,           XK_Return,       togglespawnfloating,  {0} },
+  { MODKEY|AltMask,               XK_Return,       toggleexclusiveview,  {0} },
   { MODKEY,                       XK_Home,         togglebar,       {0} },
   { MODKEY,                       XK_Left,         setlayout,       {.ui = 0 } },
   { MODKEY,                       XK_Right,        setlayout,       {.ui = 1 } },
@@ -163,9 +166,9 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_k,            moveclient_y,    {.f = -0.05 } },
   { MODKEY|ShiftMask,             XK_l,            moveclient_x,    {.f = +0.05 } },
   { MODKEY|ControlMask,           XK_h,            incv1,           {.i = -1 } },
-  { MODKEY|ControlMask,           XK_j,            incv2,           {.i = -1 } },
-  { MODKEY|ControlMask,           XK_k,            incv2,           {.i = +1 } },
-  { MODKEY|ControlMask,           XK_l,            incv1,           {.i = +1 } },
+  { MODKEY|ControlMask,           XK_j,            incv1,           {.i = +1 } },
+  { MODKEY|ControlMask,           XK_k,            incv2,           {.i = -1 } },
+  { MODKEY|ControlMask,           XK_l,            incv2,           {.i = +1 } },
   { MODKEY|ControlMask,           XK_h,            moveclient_w,    {.f = -0.05 } },
   { MODKEY|ControlMask,           XK_j,            moveclient_h,    {.f = +0.05 } },
   { MODKEY|ControlMask,           XK_k,            moveclient_h,    {.f = -0.05 } },

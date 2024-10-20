@@ -148,6 +148,7 @@ typedef struct {
   Client *first_stack;
   uint64_t last_toggled_tags;
   int spawn_floating;
+  int exclusive_view;
 } Workspace;
 
 /* function declarations */
@@ -244,6 +245,7 @@ void tilev1v2(Monitor *m, int left);
 static void tilev1v2left(Monitor *m);
 static void tilev1v2right(Monitor *m);
 static void togglebar(const Arg *arg);
+static void toggleexclusiveview(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void togglespawnfloating(const Arg *arg);
 static void toggletag(const Arg *arg);
@@ -712,6 +714,7 @@ createmon(void)
 	  ws->vf = vf_init;
 	  ws->last_toggled_tags = 0;
 	  ws->spawn_floating = 0;
+	  ws->exclusive_view = 0;
 	}
 	m->showbar = showbar;
 	m->topbar = topbar;
@@ -841,6 +844,14 @@ drawbar(Monitor *m)
 
     if (ws->spawn_floating)
       drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, 1);
+    if (ws->exclusive_view) {
+      uint ix = x + w - boxs - 1;
+      uint iy = bh - boxs - 5;
+      for (int i = 1; i < 6; i++, ix--, iy++) {
+	drw_rect(drw, ix, iy, i, 1, 1, 1);
+      }
+    }
+
     x += w;
   }
 
@@ -2490,6 +2501,14 @@ togglebar(const Arg *arg)
 }
 
 void
+toggleexclusiveview(const Arg *arg)
+{
+  Workspace *ws = WORKSPACE(selmon);
+  ws->exclusive_view ^= 1;
+  drawbar(selmon);
+}
+
+void
 togglefloating(const Arg *arg)
 {
 	if (!selmon->sel)
@@ -2535,11 +2554,21 @@ void
 toggleview(const Arg *arg)
 {
   Workspace *ws = WORKSPACE(selmon);
-  uint64_t arg_tag =
-    arg->ui == 0 ? ws->last_toggled_tags
-    : arg->ui != ws->own_tag ? arg->ui & TAGMASK
-    : ws->tags == ws->own_tag ? ws->last_toggled_tags
-    : ws->tags ^ ws->own_tag;
+  uint64_t arg_tag = 0;
+  if (arg->ui == 0) {
+    arg_tag = ws->last_toggled_tags;
+  } else if (arg->ui != ws->own_tag) {
+    arg_tag = arg->ui & TAGMASK;
+    if (ws->exclusive_view) {
+      uint64_t ex_tag = ws->tags ^ (arg_tag | ws->own_tag);
+      if (ex_tag) arg_tag = ex_tag;
+    }
+  } else if (ws->tags == ws->own_tag) {
+    arg_tag = ws->last_toggled_tags;
+  } else {
+    arg_tag = ws->tags ^ ws->own_tag;
+  }
+
   if (!arg_tag) return;
 
   uint64_t newtags = ws->tags ^ arg_tag;
