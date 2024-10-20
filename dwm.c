@@ -934,9 +934,9 @@ drawbar(Monitor *m)
     char buf[20];
     snprintf(buf, sizeof buf, "%d", sel_idx);
     uint iw = TEXTW(buf) + 10;
-    uint cw = MIN(MAX(TEXTW(c->name), BAR_CLIENT_MIN_WIDTH), w);
+    uint cw = MIN(MAX(TEXTW(c->name), BAR_CLIENT_MIN_WIDTH), w - iw);
 
-    if (iw + cw < w) {
+    if (iw + cw <= w) {
       drw_setscheme(drw, scheme[SchemeSelIdx]);
       drw_text(drw, x, 0, iw, bh, lrpad / 2 + 5, buf, 0);
       x += iw;
@@ -1108,7 +1108,7 @@ focusstack(const Arg *arg)
 void
 focus_1st_master(const Arg *arg)
 {
-  Client *c = selmon->clients;
+  Client *c = nexttiled(selmon->clients);
   if (c && c != selmon->sel) {
     focus(c);
     restack(selmon);
