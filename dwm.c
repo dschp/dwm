@@ -2427,17 +2427,14 @@ tile(Monitor *m)
   }
   if (!n) return;
 
-  const uint mw =
-    m_cnt == 0 ? 0
-    : s_cnt == 0 ? m->ww
-    : m->ww * ws->vf;
-
   c = nexttiled(m->clients, -1);
 
-  const uint w1 = mw - (2*c->bw);
-  const uint w2 = m->ww - mw - (2*c->bw);
-  const uint x1 = 0;
-  const uint x2 = m->wx + mw;
+  const uint dx = tag1 && tag2 ? m->ww * ws->vf
+    : tag1 ? m->ww : 0;
+  const uint x1 = m->wx;
+  const uint x2 = m->wx + dx;
+  const uint w1 = dx - (2*c->bw);
+  const uint w2 = m->ww - dx - (2*c->bw);
 
   const uint div1 = ws->v1 ? MIN(m_cnt, ws->v1) : m_cnt;
   const uint div2 = ws->v2 ? MIN(s_cnt, ws->v2) : s_cnt;
