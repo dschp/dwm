@@ -75,7 +75,7 @@ enum { /* color schemes */
   SchemeNorm,
   SchemeSel1,
   SchemeSel2,
-  SchemeLayout,
+  SchemeWS,
   SchemeValue1,
   SchemeValue2,
   SchemeValue3,
@@ -853,7 +853,7 @@ drawbar(Monitor *m)
     char buf[32];
     snprintf(buf, sizeof(buf), "%s", workspacez[m->ws_idx]);
     w = TEXTW(buf);
-    drw_setscheme(drw, scheme[SchemeLayout]);
+    drw_setscheme(drw, scheme[SchemeWS]);
     drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 1);
 
     if (ws->spawn_floating)
@@ -2157,25 +2157,26 @@ setlayout(const Arg *arg)
 }
 
 void
-setviews(size_t v1, size_t v2, uint tag_idx)
+setviews(size_t view, uint tag_idx)
 {
-  if (v1 >= WS_VIEWS || v2 >= WS_VIEWS) return;
+  if (view >= WS_VIEWS) return;
   if (tag_idx < 0 || tag_idx >= LENGTH(tags)) return;
 
   Workspace *ws = WORKSPACE(selmon);
   tag_t tag = 1ULL << tag_idx;
-  if (tag == ws->viewtag[v1]) {
-    ws->viewtag[v1] = 0;
-    ws->spawn_view = v2;
+  size_t other = view ^ 1;
+  if (tag == ws->viewtag[view]) {
+    ws->viewtag[view] = 0;
+    ws->spawn_view = other;
   } else {
-    if (tag == ws->viewtag[v2]) {
-      ws->viewtag[v2] = ws->viewtag[v1];
+    if (tag == ws->viewtag[other]) {
+      ws->viewtag[other] = ws->viewtag[view];
     }
-    ws->viewtag[v1] = tag;
-    ws->spawn_view = v1;
+    ws->viewtag[view] = tag;
+    ws->spawn_view = view;
   }
 
-  ws->tags = ws->viewtag[v1] | ws->viewtag[v2];
+  ws->tags = ws->viewtag[view] | ws->viewtag[other];
   focus_1st_visible(tag);
   arrange(selmon);
 }
@@ -2183,13 +2184,13 @@ setviews(size_t v1, size_t v2, uint tag_idx)
 void
 setview_1(const Arg *arg)
 {
-  setviews(0, 1, arg->i);
+  setviews(0, arg->i);
 }
 
 void
 setview_2(const Arg *arg)
 {
-  setviews(1, 0, arg->i);
+  setviews(1, arg->i);
 }
 
 void
@@ -2293,7 +2294,7 @@ showhide(Client *c)
 	if (ISVISIBLE(ws, c)) {
 		/* show clients top down */
 		XMoveWindow(dpy, c->win, c->x, c->y);
-		if ((!WORKSPACE(c->mon)->layout->arrange || c->isfloating) && !c->isfullscreen)
+		if ((!ws->layout->arrange || c->isfloating) && !c->isfullscreen)
 			resize(c, c->x, c->y, c->w, c->h, 0);
 		showhide(c->snext);
 	} else {
