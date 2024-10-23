@@ -242,7 +242,10 @@ static void spawn(const Arg *arg);
 static void swapspawnview(const Arg *arg);
 static void switchworkspace(const Arg *arg);
 static void tag(const Arg *arg);
-static void tile(Monitor *m);
+static void tile_vv(Monitor *m);
+static void tile_vh(Monitor *m);
+static void tile_hv(Monitor *m);
+static void tile_hh(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void togglespawnfloating(const Arg *arg);
@@ -2414,7 +2417,7 @@ tag(const Arg *arg)
 }
 
 void
-tile(Monitor *m)
+tile(Monitor *m, int vert1, int vert2)
 {
   uint n, m_cnt = 0, s_cnt = 0;
   Client *c;
@@ -2430,34 +2433,68 @@ tile(Monitor *m)
 
   c = nexttiled(m->clients, -1);
 
-  const uint dx = tag1 && tag2 ? m->ww * ws->vf
+  const uint w1 =
+    tag1 && tag2 ? m->ww * ws->vf
     : tag1 ? m->ww : 0;
+  const uint w2 = m->ww - w1;
   const uint x1 = m->wx;
-  const uint x2 = m->wx + dx;
-  const uint w1 = dx - (2*c->bw);
-  const uint w2 = m->ww - dx - (2*c->bw);
+  const uint x2 = m->wx + w1;
 
   const uint div1 = ws->v1 ? MIN(m_cnt, ws->v1) : m_cnt;
   const uint div2 = ws->v2 ? MIN(s_cnt, ws->v2) : s_cnt;
   const uint lim1 = div1 - 1;
   const uint lim2 = div2 - 1;
 
-  const uint h1 = div1 ? m->wh / div1 : 0;
-  const uint h2 = div2 ? m->wh / div2 : 0;
-  const uint r1 = m->wh - h1 * div1;
-  const uint r2 = m->wh - h2 * div2;
+  const uint each1 = div1 ? (vert1 ? m->wh : w1) / div1 : 0;
+  const uint each2 = div2 ? (vert2 ? m->wh : w2) / div2 : 0;
+  const uint r1 = vert1 ? m->wh - each1 * div1 : w1 - each1 * div1;
+  const uint r2 = vert2 ? m->wh - each2 * div2 : w2 - each2 * div2;
 
-  for (int i = 0, mi = 0, si = 0; i < n; i++, c = nexttiled(c->next, -1)) {
+  for (int i1 = 0, i2 = 0; n; n--, c = nexttiled(c->next, -1)) {
     if (c->tags & tag1) {
-      resize(c, x1, m->wy + MIN(mi, lim1) * h1, w1,
-	     h1 + (mi < lim1 ? 0 : r1) - (2*c->bw), 0);
-      mi++;
+      if (vert1)
+	resize(c, x1, m->wy + MIN(i1, lim1) * each1, w1 - (2*c->bw),
+	       each1 + (i1 < lim1 ? 0 : r1) - (2*c->bw), 0);
+      else
+	resize(c, x1 + MIN(i1, lim1) * each1, m->wy,
+	       each1 + (i1 < lim1 ? 0 : r1) - (2*c->bw),
+	       m->wh - (2*c->bw), 0);
+      i1++;
     } else {
-      resize(c, x2, m->wy + MIN(si, lim2) * h2, w2,
-	     h2 + (si < lim2 ? 0 : r2) - (2*c->bw), 0);
-      si++;
+      if (vert2)
+	resize(c, x2, m->wy + MIN(i2, lim2) * each2, w2 - (2*c->bw),
+	       each2 + (i2 < lim2 ? 0 : r2) - (2*c->bw), 0);
+      else
+	resize(c, x2 + MIN(i2, lim2) * each2, m->wy,
+	       each2 + (i2 < lim2 ? 0 : r2) - (2*c->bw),
+	       m->wh - (2*c->bw), 0);
+      i2++;
     }
   }
+}
+
+void
+tile_vv(Monitor *m)
+{
+  tile(m, 1, 1);
+}
+
+void
+tile_vh(Monitor *m)
+{
+  tile(m, 1, 0);
+}
+
+void
+tile_hv(Monitor *m)
+{
+  tile(m, 0, 1);
+}
+
+void
+tile_hh(Monitor *m)
+{
+  tile(m, 0, 0);
 }
 
 void

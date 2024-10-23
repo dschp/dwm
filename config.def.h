@@ -82,7 +82,10 @@ static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen win
 
 static const Layout layouts[] = {
   /* symbol   arrange function */
-  { "[]=",    tile },
+  { "=/=",    tile_vv },
+  { "=/|",    tile_vh },
+  { "|/=",    tile_hv },
+  { "|/|",    tile_hh },
   { "<>",     juststack },
   { "[M]",    monocle },
 };
@@ -121,10 +124,13 @@ static Key keys[] = {
   { MODKEY|ShiftMask,             XK_Return,       spawn,           {.v = termcmd } },
   { MODKEY|ControlMask,           XK_Return,       togglespawnfloating, {0} },
   { MODKEY|AltMask,               XK_Return,       swapspawnview,   {0} },
-  { MODKEY,                       XK_Left,         setlayout,       {.ui = 0 } },
-  { MODKEY,                       XK_Right,        setlayout,       {.ui = 1 } },
-  { MODKEY,                       XK_Up,           setlayout,       {.ui = 2 } },
-  { MODKEY,                       XK_Down,         togglebar,       {0} },
+  { MODKEY,                       XK_Escape,       togglebar,       {0} },
+  { MODKEY,                       XK_Up,           setlayout,       {.ui = 0 } },
+  { MODKEY,                       XK_Left,         setlayout,       {.ui = 1 } },
+  { MODKEY,                       XK_Right,        setlayout,       {.ui = 2 } },
+  { MODKEY,                       XK_Down,         setlayout,       {.ui = 3 } },
+  { MODKEY|ShiftMask,             XK_Up,           setlayout,       {.ui = 4 } },
+  { MODKEY|ShiftMask,             XK_Down,         setlayout,       {.ui = 5 } },
   { MODKEY,                       XK_Tab,          switchworkspace, {.i = -1 } },
   { MODKEY|ControlMask,           XK_Tab,          clearviews,      {.ui = 0 } },
   { MODKEY|AltMask,               XK_Tab,          focuscycle_floating, {.i = +1 } },
