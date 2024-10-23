@@ -2387,6 +2387,11 @@ swapviews(const Arg *arg)
   ws->viewtag[0] = ws->viewtag[1];
   ws->viewtag[1] = temp;
   ws->spawn_view ^= 1;
+
+  if (selmon->sel) {
+    size_t si = selmon->sel->tags & ws->viewtag[0] ? SchemeSel1 : SchemeSel2;
+    XSetWindowBorder(dpy, selmon->sel->win, scheme[si][ColBorder].pixel);
+  }
   arrange(selmon);
 }
 
