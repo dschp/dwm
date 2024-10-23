@@ -240,6 +240,7 @@ static void snapandcenter_x(const Arg *arg);
 static void snapandcenter_y(const Arg *arg);
 static void spawn(const Arg *arg);
 static void swapspawnview(const Arg *arg);
+static void swapviews(const Arg *arg);
 static void switchworkspace(const Arg *arg);
 static void tag(const Arg *arg);
 static void tile_vv(Monitor *m);
@@ -2370,10 +2371,23 @@ void
 swapspawnview(const Arg *arg)
 {
   Workspace *ws = WORKSPACE(selmon);
-  if (ws->viewtag[0] && ws->viewtag[1]) {
-    ws->spawn_view ^= 1;
-  }
+  if (!ws->viewtag[0] || !ws->viewtag[1])
+    return;
+  ws->spawn_view ^= 1;
   drawbar(selmon);
+}
+
+void
+swapviews(const Arg *arg)
+{
+  Workspace *ws = WORKSPACE(selmon);
+  if (!ws->tags) return;
+
+  tag_t temp = ws->viewtag[0];
+  ws->viewtag[0] = ws->viewtag[1];
+  ws->viewtag[1] = temp;
+  ws->spawn_view ^= 1;
+  arrange(selmon);
 }
 
 void
