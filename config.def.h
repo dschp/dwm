@@ -49,7 +49,10 @@ static const char *colors[][3]      = {
 };
 
 /* tagging */
-static const char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" };
+static const char *tags[] = {
+	"1", "2", "3", "4", "5", "6", "7", "8", "9", "0",
+	"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+};
 
 static const Rule rules[] = {
 	/* xprop(1):
@@ -119,8 +122,6 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_m,      setlayout,      {.v = &layouts[2]} },
 	{ MODKEY,                       XK_space,  setlayout,      {0} },
 	{ MODKEY|ShiftMask,             XK_space,  togglefloating, {0} },
-	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
-	{ MODKEY|ShiftMask,             XK_0,      tag,            {.ui = ~0 } },
 	{ MODKEY,                       XK_comma,  focusmon,       {.i = -1 } },
 	{ MODKEY,                       XK_period, focusmon,       {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
@@ -135,6 +136,18 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_8,                      7)
 	TAGKEYS(                        XK_9,                      8)
 	TAGKEYS(                        XK_0,                      9)
+	TAGKEYS(                        XK_F1,                     10)
+	TAGKEYS(                        XK_F2,                     11)
+	TAGKEYS(                        XK_F3,                     12)
+	TAGKEYS(                        XK_F4,                     13)
+	TAGKEYS(                        XK_F5,                     14)
+	TAGKEYS(                        XK_F6,                     15)
+	TAGKEYS(                        XK_F7,                     16)
+	TAGKEYS(                        XK_F8,                     17)
+	TAGKEYS(                        XK_F9,                     18)
+	TAGKEYS(                        XK_F10,                    19)
+	TAGKEYS(                        XK_F11,                    20)
+	TAGKEYS(                        XK_F12,                    21)
 	{ MODKEY|ControlMask|Mod1Mask,  XK_q,      quit,           {0} },
 };
 
