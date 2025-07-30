@@ -273,6 +273,8 @@ static Window root, wmcheckwin;
 #include "config.h"
 
 static const char *tagnames[LENGTH(tags)];
+static unsigned int tagxs[LENGTH(tags)];
+static unsigned int x_layout, x_wintitle;
 
 struct Pertag {
 	unsigned int curtag, prevtag; /* current and previous tag */
@@ -430,7 +432,7 @@ attachstack(Client *c)
 void
 buttonpress(XEvent *e)
 {
-	unsigned int i, x, click;
+	unsigned int i, click;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -444,16 +446,14 @@ buttonpress(XEvent *e)
 		focus(NULL);
 	}
 	if (ev->window == selmon->barwin) {
-		i = x = 0;
-		do
-			x += TEXTW(tags[i]);
-		while (ev->x >= x && ++i < LENGTH(tags));
+		i = 0;
+		while (ev->x >= tagxs[i] && ++i < LENGTH(tags));
 		if (i < LENGTH(tags)) {
 			click = ClkTagBar;
 			arg.ui = 1 << i;
-		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
+		} else if (ev->x < x_layout)
 			click = ClkLtSymbol;
-		else if (ev->x > selmon->ww - (int)TEXTW(stext))
+		else if (ev->x < x_wintitle)
 			click = ClkStatusText;
 		else
 			click = ClkWinTitle;
@@ -744,6 +744,7 @@ drawbar(Monitor *m)
 	for (i = 0; i < LENGTH(tags); i++) {
 		snprintf(buf, sizeof(buf), "%s:%s", tags[i], tagnames[i]);
 		w = TEXTW(buf);
+		tagxs[i] = x + w;
 		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
 		drw_text(drw, x, 0, w, bh, lrpad / 2, buf, urg & 1 << i);
 		if (occ & 1 << i)
@@ -755,6 +756,7 @@ drawbar(Monitor *m)
 	w = TEXTW(m->ltsymbol);
 	drw_setscheme(drw, scheme[SchemeLayout]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+	x_layout = x;
 
 	snprintf(buf, sizeof(buf), "%d", m->pertag->nmasters[m->pertag->curtag]);
 	w = TEXTW(buf);
@@ -767,6 +769,7 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeMfact]);
 	drw_text(drw, x, 0, w, bh, lrpad / 2, buf, 0);
 	x += w;
+	x_wintitle = x;
 
 	if ((w = m->ww - tw - x) > bh) {
 		if (m->sel) {
