@@ -41,7 +41,7 @@ static const char col_dmenu_selbg[] = "#0077cc";
 
 static const char *colors[][3]      = {
 	/*                  fg            bg            border   */
-    [SchemeNorm]    = { col_white2,   col_black2,   col_bdr0 },
+	[SchemeNorm]    = { col_white2,   col_black2,   col_bdr0 },
 	[SchemeSel]     = { col_sel1,     col_black1,   col_bdr1 },
 	[SchemeLayout]  = { col_green,    col_black2,   col_bdr0 },
 	[SchemeNmaster] = { col_red,      col_black2,   col_bdr0 },
@@ -116,6 +116,9 @@ static const Key keys[] = {
 	{ MODKEY|ControlMask,           XK_l,      setmfact,       {.f = +0.01} },
 	{ MODKEY,                       XK_Return, zoom,           {0} },
 	{ MODKEY,                       XK_Tab,    view,           {0} },
+	{ MODKEY,                       XK_g,      setbarmode,     {.ui = BarModeDefault} },
+	{ MODKEY,                       XK_o,      setbarmode,     {.ui = BarModeOccurrence} },
+	{ MODKEY,                       XK_n,      setbarmode,     {.ui = BarModeCurrent} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
 	{ MODKEY,                       XK_t,      setlayout,      {.v = &layouts[0]} },
 	{ MODKEY,                       XK_f,      setlayout,      {.v = &layouts[1]} },
@@ -155,10 +158,15 @@ static const Key keys[] = {
 /* click can be ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle, ClkClientWin, or ClkRootWin */
 static const Button buttons[] = {
 	/* click                event mask      button          function        argument */
-	{ ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
+	{ ClkLtSymbol,          0,              Button1,        setlayout,      {.v = &layouts[0]} },
+	{ ClkLtSymbol,          0,              Button2,        setlayout,      {.v = &layouts[1]} },
 	{ ClkLtSymbol,          0,              Button3,        setlayout,      {.v = &layouts[2]} },
+	{ ClkWinTitle,          0,              Button1,        focusstack,     {.i = +1} },
 	{ ClkWinTitle,          0,              Button2,        zoom,           {0} },
+	{ ClkWinTitle,          0,              Button3,        focusstack,     {.i = -1} },
+	{ ClkStatusText,        0,              Button1,        incnmaster,     {.i = +1 } },
 	{ ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
+	{ ClkStatusText,        0,              Button3,        incnmaster,     {.i = -1 } },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
@@ -167,4 +175,3 @@ static const Button buttons[] = {
 	{ ClkTagBar,            MODKEY,         Button1,        tag,            {0} },
 	{ ClkTagBar,            MODKEY,         Button3,        toggletag,      {0} },
 };
-

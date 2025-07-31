@@ -65,6 +65,7 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
+enum { BarModeDefault, BarModeOccurrence, BarModeCurrent };
 
 typedef union {
 	int i;
@@ -131,6 +132,7 @@ struct Monitor {
 	Window barwin;
 	const Layout *lt[2];
 	Pertag *pertag;
+	unsigned int barmode;
 };
 
 typedef struct {
@@ -198,6 +200,7 @@ static void run(void);
 static void scan(void);
 static int sendevent(Client *c, Atom proto);
 static void sendmon(Client *c, Monitor *m);
+static void setbarmode(const Arg *arg);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
@@ -237,7 +240,7 @@ static void zoom(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
-static char stext[256];
+static char stext[500];
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -659,6 +662,7 @@ createmon(void)
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	m->pertag = ecalloc(1, sizeof(Pertag));
 	m->pertag->curtag = m->pertag->prevtag = 1;
+	m->barmode = BarModeDefault;
 
 	for (i = 0; i <= LENGTH(tags); i++) {
 		m->pertag->nmasters[i] = m->nmaster;
@@ -725,10 +729,10 @@ dirtomon(int dir)
 void
 drawbar(Monitor *m)
 {
-	int x, w, tw = 0;
+	int x, w;
 	int boxs = drw->fonts->h / 9;
 	int boxw = drw->fonts->h / 6 + 2;
-	unsigned int i, occ = 0, urg = 0;
+	unsigned int i, bit, occ = 0, urg = 0, nwins = 0;
 	Client *c;
 	char buf[50];
 
@@ -739,18 +743,37 @@ drawbar(Monitor *m)
 		occ |= c->tags;
 		if (c->isurgent)
 			urg |= c->tags;
+		if (c->tags & m->tagset[m->seltags])
+			nwins++;
 	}
 	x = 0;
-	for (i = 0; i < LENGTH(tags); i++) {
+	for (i = 0, bit = 1; i < LENGTH(tags); i++, bit <<= 1) {
+		int skip = 0;
+		unsigned int has_wins = occ & bit;
+		unsigned int is_sel = m->tagset[m->seltags] & bit;
+		unsigned int is_urg = urg & bit;
+		switch (m->barmode) {
+		case BarModeOccurrence:
+			if (!has_wins && !is_sel) skip = 1;
+			break;
+		case BarModeCurrent:
+			if (!is_sel) skip = 1;
+			break;
+		}
+		if (skip) {
+			tagxs[i] = x;
+			continue;
+		}
+
 		snprintf(buf, sizeof(buf), "%s:%s", tags[i], tagnames[i]);
 		w = TEXTW(buf);
 		tagxs[i] = x + w;
-		drw_setscheme(drw, scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
-		drw_text(drw, x, 0, w, bh, lrpad / 2, buf, urg & 1 << i);
-		if (occ & 1 << i)
+		drw_setscheme(drw, scheme[is_sel ? SchemeSel : SchemeNorm]);
+		drw_text(drw, x, 0, w, bh, lrpad / 2, buf, is_urg);
+		if (has_wins)
 			drw_rect(drw, x + boxs, boxs, boxw, boxw,
-				m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-				urg & 1 << i);
+				m == selmon && selmon->sel && selmon->sel->tags & bit,
+				is_urg);
 		x += w;
 	}
 	w = TEXTW(m->ltsymbol);
@@ -771,16 +794,38 @@ drawbar(Monitor *m)
 	x += w;
 	x_wintitle = x;
 
-	if ((w = m->ww - tw - x) > bh) {
-		if (m->sel) {
+	if ((w = m->ww - x) > bh) {
+		switch (m->barmode) {
+		case BarModeCurrent:
+			if (nwins == 0) break;
+
+			unsigned int w2 = w / nwins;
+			unsigned int tags = m->tagset[m->seltags];
+			for (c = m->clients; c; c = c->next) {
+				if (c->tags & tags) {
+					drw_setscheme(drw, scheme[c == m->sel ? SchemeSel : SchemeNorm]);
+					drw_text(drw, x, 0, w2, bh, lrpad / 2, c->name, 0);
+					if (c->isfloating)
+						drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, 0);
+
+					x += w2;
+				}
+			}
+			break;
+		default:
+			if (!m->sel) break;
+
 			drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
 			drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
 			if (m->sel->isfloating)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
-		} else {
-			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_rect(drw, x, 0, w, bh, 1, 1);
+
+			x += w;
 		}
+	}
+	if ((w = m->ww - x) > 0) {
+		drw_setscheme(drw, scheme[SchemeNorm]);
+		drw_rect(drw, x, 0, w, bh, 1, 1);
 	}
 	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
@@ -1471,6 +1516,15 @@ sendmon(Client *c, Monitor *m)
 }
 
 void
+setbarmode(const Arg *arg)
+{
+	if (!arg || arg->ui > BarModeCurrent)
+		return;
+	selmon->barmode = arg->ui;
+	drawbar(selmon);
+}
+
+void
 setclientstate(Client *c, long state)
 {
 	long data[] = { state, None };
@@ -2076,7 +2130,7 @@ updatestatus(void)
 		if (token == NULL) {
 			tagnames[i] = "";
 		} else {
-			tagnames[i] = *token == ' ' ? "" : token;
+			tagnames[i] = *token == '#' ? "" : token;
 			token = strtok(NULL, &delim);
 		}
 	}
