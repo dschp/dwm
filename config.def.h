@@ -66,7 +66,7 @@ static const Rule rules[] = {
 /* layout(s) */
 static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
 static const int nmaster     = 1;    /* number of clients in master area */
-static const int resizehints = 1;    /* 1 means respect size hints in tiled resizals */
+static const int resizehints = 0;    /* 1 means respect size hints in tiled resizals */
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 
 static const Layout layouts[] = {
@@ -100,14 +100,18 @@ static const char *dmenucmd[] = {
 	NULL,
 };
 static const char *termcmd[]  = { "st", NULL };
+static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
-	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
-	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
+	{ MODKEY,                       XK_slash,  spawn,          {.v = dmenucmd } },
+	{ MODKEY,                       XK_apostrophe,  spawn,          {.v = termcmd } },
+	{ MODKEY,                       XK_p,      spawn,          {.v = pavucmd } },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
 	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
+	{ MODKEY,                 XK_bracketleft,  focusstack,     {.i = -1 } },
+	{ MODKEY,                 XK_bracketright, focusstack,     {.i = +1 } },
 	{ MODKEY,                       XK_i,      incnmaster,     {.i = +1 } },
 	{ MODKEY,                       XK_u,      incnmaster,     {.i = -1 } },
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05} },
@@ -125,10 +129,10 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_m,      setlayout,      {.v = &layouts[2]} },
 	{ MODKEY,                       XK_space,  setlayout,      {0} },
 	{ MODKEY|ShiftMask,             XK_space,  togglefloating, {0} },
-	{ MODKEY,                       XK_comma,  focusmon,       {.i = -1 } },
-	{ MODKEY,                       XK_period, focusmon,       {.i = +1 } },
-	{ MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
-	{ MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
+	{ MODKEY,                       XK_F13,    focusmon,       {.i = -1 } },
+	{ MODKEY,                       XK_F14,    focusmon,       {.i = +1 } },
+	{ MODKEY|ShiftMask,             XK_F13,    tagmon,         {.i = -1 } },
+	{ MODKEY|ShiftMask,             XK_F14,    tagmon,         {.i = +1 } },
 	TAGKEYS(                        XK_1,                      0)
 	TAGKEYS(                        XK_2,                      1)
 	TAGKEYS(                        XK_3,                      2)
@@ -164,9 +168,13 @@ static const Button buttons[] = {
 	{ ClkWinTitle,          0,              Button1,        focusstack,     {.i = +1} },
 	{ ClkWinTitle,          0,              Button2,        zoom,           {0} },
 	{ ClkWinTitle,          0,              Button3,        focusstack,     {.i = -1} },
+	{ ClkWinTitle,          0,              Button4,        focusstack,     {.i = -1} },
+	{ ClkWinTitle,          0,              Button5,        focusstack,     {.i = +1} },
 	{ ClkStatusText,        0,              Button1,        incnmaster,     {.i = +1 } },
 	{ ClkStatusText,        0,              Button2,        spawn,          {.v = termcmd } },
 	{ ClkStatusText,        0,              Button3,        incnmaster,     {.i = -1 } },
+	{ ClkStatusText,        0,              Button4,        setmfact,       {.f = +0.01} },
+	{ ClkStatusText,        0,              Button5,        setmfact,       {.f = -0.01} },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
