@@ -104,8 +104,9 @@ static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
-	{ MODKEY,                       XK_slash,  spawn,          {.v = dmenucmd } },
-	{ MODKEY,                       XK_apostrophe,  spawn,          {.v = termcmd } },
+	{ MODKEY,                    XK_semicolon, spawn,          {.v = dmenucmd } },
+	{ MODKEY,                   XK_apostrophe, spawn,          {.v = dmenucmd } },
+	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_p,      spawn,          {.v = pavucmd } },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
