@@ -54,7 +54,6 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1ULL << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 #define CURVIEW(M)              (M->views[M->curview])
 #define CURLAYOUT(M)            (layouts[CURVIEW(M).sellayout])
@@ -192,6 +191,7 @@ static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
+static void swaptags(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tagnview(const Arg *arg);
@@ -324,7 +324,8 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : 1ULL << c->mon->curview;
+	tagbits t = c->tags & ((1ULL << LENGTH(tags)) - 1);
+	c->tags = t ? t : 1ULL << c->mon->curview;
 }
 
 int
@@ -1800,16 +1801,36 @@ spawn(const Arg *arg)
 }
 
 void
+swaptags(const Arg *arg)
+{
+	if (!arg
+		|| arg->i < 0 || arg->i >= LENGTH(tags) || arg->i == selmon->curview)
+		return;
+	tagbits t1 = (1ULL << selmon->curview) | (1ULL << arg->i);
+	for (Client *c = selmon->clients; c; c = c->next) {
+		if (c->tags & t1) {
+			tagbits t2 = c->tags ^ t1;
+			if (t2)
+				c->tags = t2;
+		}
+	}
+
+	selmon->prevview = selmon->curview;
+	selmon->curview = arg->i;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
 tag(const Arg *arg)
 {
-	if (!arg)
+	if (!selmon->sel || !arg
+		|| arg->i < 0 || arg->i >= LENGTH(tags) || arg->i == selmon->curview)
 		return;
-	tagbits t = (1ULL << arg->ui) & TAGMASK;
-	if (selmon->sel && t) {
-		selmon->sel->tags = t;
-		focus(NULL);
-		arrange(selmon);
-	}
+	selmon->sel->tags = 1ULL << arg->i;
+	focus(NULL);
+	arrange(selmon);
 }
 
 void
@@ -1823,14 +1844,13 @@ tagmon(const Arg *arg)
 void
 tagnview(const Arg *arg)
 {
-	if (!arg || arg->ui >= LENGTH(tags) || arg->ui == selmon->curview)
+	if (!selmon->sel || !arg
+		|| arg->i < 0 || arg->i >= LENGTH(tags) || arg->i == selmon->curview)
 		return;
 	selmon->prevview = selmon->curview;
-	selmon->curview = arg->ui;
+	selmon->curview = arg->i;
 
-	if (selmon->sel) {
-		selmon->sel->tags = 1ULL << arg->ui;
-	}
+	selmon->sel->tags = 1ULL << arg->i;
 
 	focus(NULL);
 	arrange(selmon);
@@ -1895,9 +1915,9 @@ toggletag(const Arg *arg)
 {
 	tagbits newtags;
 
-	if (!arg || !selmon->sel)
+	if (!arg || arg->i < 0 || arg->i >= LENGTH(tags) || !selmon->sel)
 		return;
-	newtags = selmon->sel->tags ^ ((1ULL << arg->ui) & TAGMASK);
+	newtags = selmon->sel->tags ^ (1ULL << arg->i);
 	if (newtags) {
 		selmon->sel->tags = newtags;
 		focus(NULL);
@@ -2210,18 +2230,12 @@ updatewmhints(Client *c)
 void
 view(const Arg *arg)
 {
-	if (!arg) {
+	if (!arg || arg->i == selmon->curview)
 		return;
-	} else if (arg->ui >= LENGTH(tags)) {
-		uint tmp = selmon->prevview;
-		selmon->prevview = selmon->curview;
-		selmon->curview = tmp;
-	} else {
-		if (arg->i == selmon->curview)
-			return;
-		selmon->prevview = selmon->curview;
-		selmon->curview = arg->i;
-	}
+
+	uint to = arg->i < 0 || arg->i >= LENGTH(tags) ? selmon->prevview : arg->i;
+	selmon->prevview = selmon->curview;
+	selmon->curview = to;
 
 	focus(NULL);
 	arrange(selmon);
