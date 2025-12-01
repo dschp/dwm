@@ -1084,7 +1084,6 @@ drawbar(Monitor *m)
 {
 	const Folder *cf = m->curfldr;
 	const Workspace *cws = cf->curws;
-	const Workspace *pws = cf->prevws;
 
 	if (!cws->showbar)
 		return;
@@ -1166,17 +1165,6 @@ drawbar(Monitor *m)
 		} else {
 			m->x_folder_ellipsis_r = 0;
 		}
-	}
-
-	drw_setscheme(drw, scheme[SchemeCurrent]);
-	drw_text(drw, x, 0, cws->w_label, bh, lrpad_2, cws->label, cws->urg);
-	x += cws->w_label;
-
-	if (pws) {
-		w = pws->w_label;
-		drw_setscheme(drw, scheme[SchemePrevious]);
-		drw_text(drw, x, 0, pws->w_label, bh, lrpad_2, pws->label, pws->urg);
-		x += pws->w_label;
 	}
 
 	drw_setscheme(drw, scheme[SchemeUrgent]);
