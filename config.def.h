@@ -5,6 +5,7 @@
 #define NMASTER           1     /* number of clients in master area */
 #define RESIZEHINTS       0     /* 1 means respect size hints in tiled resizals */
 #define LOCKFULLSCREEN    1     /* 1 will force focus on the fullscreen window */
+#define REFRESH_RATE      120    /* refresh rate (per second) for client move/resize */
 #define BORDER_PX         1     /* border pixel of windows */
 #define SNAP_PX           16    /* snap pixel */
 #define SHOWBAR           1     /* 0 means no bar */
