@@ -157,12 +157,14 @@ static void arrange(Monitor *m);
 static void arrangemon(Monitor *m);
 static void attach(Client *c);
 static void attachstack(Client *c);
+static void banish_pointer(const Arg *arg);
 static void buttonpress(XEvent *e);
 static void checkotherwm(void);
 static void cleanup(void);
 static void cleanupmon(Monitor *mon);
 static void clientmessage(XEvent *e);
 static void client_select(const Arg *arg);
+static void client_stack(const Arg *arg);
 static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
@@ -244,7 +246,7 @@ static Client *wintoclient(Window w);
 static Monitor *wintomon(Window w);
 static void ws_add(const Arg *arg);
 static void ws_adjacent(const Arg *arg);
-static void ws_client(const Arg *arg);
+static void ws_move_client(const Arg *arg);
 static void ws_move_folder(const Arg *arg);
 static void ws_remove(const Arg *arg);
 static void ws_select(const Arg *arg);
@@ -312,7 +314,6 @@ struct Monitor {
 
 	int x_folder_ellipsis_l;
 	int x_folder_ellipsis_r;
-	int x_selected_ws;
 	int x_urgent_list;
 	int x_layout;
 	int x_layout_param;
@@ -454,37 +455,40 @@ _ws_delete(Monitor *m, int idx)
 }
 
 void
-_ws_client(Client *c, int to)
+_ws_move_client(Client *c, int to)
 {
 	if (!c)
 		return;
 
 	Folder *f = selmon->curfldr;
-	Workspace *ws;
 	if (!to) {
+		uint cnt = 0;
+		for (Client *c2 = c->mon->clients; c2; c2 = c2->next)
+			if (c2->ws == c->ws)
+				cnt++;
+		if (cnt < 2)
+			return;
+
 		_ws_create(f);
 		c->ws = f->curws;
+	} else {
+		const uint absto = abs(to);
+		Workspace *ws;
+		ws = f->wss;
+		for (int i = 1; ws && i != absto; ws = ws->next, i++);
 
-		focus(NULL);
-		arrange(selmon);
-		return;
-	}
+		if (!ws || ws == c->ws)
+			return;
 
-	const uint absto = abs(to);
-	ws = f->wss;
-	for (int i = 1; ws && i != absto; ws = ws->next, i++);
-
-	if (ws && ws != c->ws) {
 		c->ws = ws;
-
 		if (to < 0) {
 			f->prevws = f->curws;
 			f->curws = ws;
 		}
-
-		focus(NULL);
-		arrange(selmon);
 	}
+
+	focus(NULL);
+	arrange(selmon);
 }
 
 void
@@ -672,6 +676,13 @@ attachstack(Client *c)
 }
 
 void
+banish_pointer(const Arg *arg)
+{
+	XWarpPointer(dpy, None, root, 0, 0, 0, 0, selmon->mw, TOPBAR ? 0 : selmon->mh);
+    XFlush(dpy);
+}
+
+void
 buttonpress(XEvent *e)
 {
 	uint i, click;
@@ -704,11 +715,6 @@ buttonpress(XEvent *e)
 		if (ev->x < selmon->x_folder_ellipsis_r) {
 			if (ev->button == Button1)
 				_folder_select(_folder_tail(selmon));
-			return;
-		}
-		if (ev->x < selmon->x_selected_ws) {
-			if (ev->button == Button1)
-				_ws_select(selmon->curfldr->prevws);
 			return;
 		}
 
@@ -857,15 +863,58 @@ client_select(const Arg *arg)
 	if (!arg)
 		return;
 
+	const Workspace *cws = selmon->curfldr->curws;
+	Client *candidate = NULL;
+	Client *c = selmon->clients;
 	if (arg->i > 0) {
-		Client *c = selmon->clients;
-		for (int i = 1; c && i < arg->i; c = c->next, i++);
+		int i = 1;
+		for (; c; c = c->next)
+			if (c->ws == cws) {
+				if (i == arg->i) {
+					candidate = c;
+					break;
+				}
+				i++;
+			}
 
-		if (c && c != selmon->sel) {
-			focus(c);
-			arrange(selmon);
-		}
+	} else if (arg->i < 0) {
+		for (; c; c = c->next)
+			if (c->ws == cws)
+				candidate = c;
 	}
+
+	if (candidate && candidate != selmon->sel) {
+		focus(candidate);
+		arrange(selmon);
+	}
+}
+
+void
+client_stack(const Arg *arg)
+{
+	Client *sel = selmon->sel;
+	if (!arg || !sel)
+		return;
+
+	if (arg->i > 0) {
+		if (sel == selmon->clients)
+			return;
+
+		detach(sel);
+		sel->next = selmon->clients;
+		selmon->clients = sel;
+	} else {
+		Client *tail = sel->next;
+		for (; tail && tail->next; tail = tail->next);
+		if (!tail)
+			return;
+
+		detach(sel);
+		tail->next = sel;
+		sel->next = NULL;
+	}
+
+	arrange(selmon);
 }
 
 void
@@ -1129,7 +1178,6 @@ drawbar(Monitor *m)
 		drw_text(drw, x, 0, pws->w_label, bh, lrpad_2, pws->label, pws->urg);
 		x += pws->w_label;
 	}
-	m->x_selected_ws = x;
 
 	drw_setscheme(drw, scheme[SchemeUrgent]);
 	for (Folder *f = m->folders; f; f = f->next) {
@@ -1213,7 +1261,7 @@ drawbar(Monitor *m)
 			if (c) {
 				drw_text(drw, x, 0, w2, bh, lrpad_2, c->name, ws->urg);
 				if (c->isfloating)
-					drw_rect(drw, x + boxs, bh - boxs, boxw, boxw, c->isfixed, ws->urg);
+					drw_rect(drw, x + boxs, boxs, boxw, boxw, c->isfixed, c->isurgent);
 			} else {
 				drw_rect(drw, x, 0, w2, bh, 1, !ws->urg);
 			}
@@ -2806,13 +2854,13 @@ ws_adjacent(const Arg *arg)
 }
 
 void
-ws_client(const Arg *arg)
+ws_move_client(const Arg *arg)
 {
 	Client *c = selmon->sel;
 	if (!arg || !c)
 		return;
 
-	_ws_client(c, arg->i);
+	_ws_move_client(c, arg->i);
 }
 
 void
@@ -2900,11 +2948,10 @@ ws_select_urg(const Arg *arg)
 	if (f != selmon->curfldr) {
 		selmon->prevfldr = selmon->curfldr;
 		selmon->curfldr = f;
-
-		if (c->ws != f->curws) {
-			f->prevws = f->curws;
-			f->curws = c->ws;
-		}
+	}
+	if (c->ws != f->curws) {
+		f->prevws = f->curws;
+		f->curws = c->ws;
 	}
 
 	focus(c);

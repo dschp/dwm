@@ -72,17 +72,14 @@ static const char *clabels[] = {
 #define MODKEY Mod4Mask
 #define WSKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,      ws_select,      {.i =  IDX} }, \
-	{ MODKEY|ShiftMask,           KEY,      ws_client,      {.i =  IDX} }, \
-	{ MODKEY|Mod1Mask,            KEY,      ws_client,      {.i = -IDX} }, \
+	{ MODKEY|ShiftMask,           KEY,      ws_move_client, {.i =  IDX} }, \
+	{ MODKEY|Mod1Mask,            KEY,      ws_move_client, {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,      ws_remove,      {.i =  IDX} },
 #define TAGKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,      folder_select,  {.i =  IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,      ws_move_folder, {.i =  IDX} },
 #define CLIENTKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,      client_select,  {.i =  IDX} },
-
-/* helper for spawning shell commands in the pre dwm-5.0 fashion */
-#define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
@@ -101,21 +98,22 @@ static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function         argument */
-	{ MODKEY,              XK_apostrophe,      spawn,           {.v = dmenucmd} },
-	{ MODKEY,                       XK_d,      spawn,           {.v = dmenucmd} },
+	{ MODKEY,                       XK_p,      spawn,           {.v = dmenucmd} },
 	{ MODKEY|ShiftMask,             XK_p,      spawn,           {.v = pavucmd} },
 	{ MODKEY|ShiftMask,        XK_Return,      spawn,           {.v = termcmd} },
 	{ MODKEY,                  XK_Return,      zoom,            {0} },
 	{ MODKEY,                   XK_space,      togglefloating,  {0} },
+	{ MODKEY,               XK_BackSpace,      togglebar,       {0} },
+	{ MODKEY,               XK_backslash,      banish_pointer,  {0} },
 	{ MODKEY,                     XK_Tab,      ws_select,       {.i =  0} },
 	{ MODKEY|Mod1Mask,            XK_Tab,      folder_select,   {.i =  0} },
-	{ MODKEY,               XK_semicolon,      ws_select_urg,   {0} },
-	{ MODKEY,                       XK_0,      ws_select,       {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_0,      folder_select,   {.i = -1} },
+	{ MODKEY,                   XK_grave,      ws_select_urg,   {0} },
+	{ MODKEY,                   XK_slash,      ws_select,       {.i = -1} },
+	{ MODKEY|Mod1Mask,          XK_slash,      folder_select,   {.i = -1} },
+	{ MODKEY|ShiftMask,         XK_slash,      client_select,   {.i = -1} },
 	{ MODKEY,                       XK_q,      setbarmode,      {.i = BarModeWorkspace} },
 	{ MODKEY,                       XK_w,      setbarmode,      {.i = BarModeClients} },
 	{ MODKEY,                       XK_e,      setbarmode,      {.i = BarModeDWM} },
-	{ MODKEY,                       XK_s,      togglebar,       {0} },
 	{ MODKEY,                       XK_t,      setlayout,       {.i = 0} },
 	{ MODKEY,                       XK_f,      setlayout,       {.i = 1} },
 	{ MODKEY,                       XK_g,      setlayout,       {.i = 2} },
@@ -132,7 +130,7 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_i,      ws_swap,         {.i = +1} },
 	{ MODKEY|Mod1Mask,              XK_i,      ws_stack,        {.i = -1} },
 	{ MODKEY,                       XK_a,      ws_add,          {0} },
-	{ MODKEY|ShiftMask,             XK_a,      ws_client,       {.i =  0} },
+	{ MODKEY|ShiftMask,             XK_a,      ws_move_client,  {.i =  0} },
 	{ MODKEY|Mod1Mask,              XK_a,      folder_add,      {0} },
 	{ MODKEY,                       XK_r,      ws_remove,       {.i =  0} },
 	{ MODKEY|ShiftMask,             XK_r,      ws_remove,       {.i = -1} },
@@ -140,16 +138,18 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_k,      focusstack,      {.i = -1} },
 	{ MODKEY|ShiftMask,             XK_j,      movestack,       {.i = +1} },
 	{ MODKEY|ShiftMask,             XK_k,      movestack,       {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_j,      incnmaster,      {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_k,      incnmaster,      {.i = +1} },
+	{ MODKEY|Mod1Mask,              XK_j,      client_stack,    {.i = -1} },
+	{ MODKEY|Mod1Mask,              XK_k,      client_stack,    {.i = +1} },
+	{ MODKEY|ControlMask,           XK_j,      incnmaster,      {.i = -1} },
+	{ MODKEY|ControlMask,           XK_k,      incnmaster,      {.i = +1} },
 	{ MODKEY,                       XK_h,      setmfact,        {.f = -0.05} },
 	{ MODKEY,                       XK_l,      setmfact,        {.f = +0.05} },
 	{ MODKEY|ControlMask,           XK_h,      setmfact,        {.f = -0.01} },
 	{ MODKEY|ControlMask,           XK_l,      setmfact,        {.f = +0.01} },
-	{ MODKEY|Mod1Mask,              XK_h,      focusmon,        {.i = +1} },
-	{ MODKEY|Mod1Mask,              XK_l,      focusmon,        {.i = -1} },
-	{ MODKEY|Mod1Mask|ShiftMask,    XK_h,      tagmon,          {.i = +1} },
-	{ MODKEY|Mod1Mask|ShiftMask,    XK_l,      tagmon,          {.i = -1} },
+	{ MODKEY,                   XK_minus,      focusmon,        {.i = -1} },
+	{ MODKEY,                   XK_equal,      focusmon,        {.i = +1} },
+	{ MODKEY|ShiftMask,         XK_minus,      tagmon,          {.i = +1} },
+	{ MODKEY|ShiftMask,         XK_equal,      tagmon,          {.i = -1} },
 	WSKEYS(                         XK_1,                       1)
 	WSKEYS(                         XK_2,                       2)
 	WSKEYS(                         XK_3,                       3)
@@ -159,6 +159,7 @@ static const Key keys[] = {
 	WSKEYS(                         XK_7,                       7)
 	WSKEYS(                         XK_8,                       8)
 	WSKEYS(                         XK_9,                       9)
+	WSKEYS(                         XK_0,                      10)
 	TAGKEYS(                       XK_F1,                       1)
 	TAGKEYS(                       XK_F2,                       2)
 	TAGKEYS(                       XK_F3,                       3)
@@ -195,8 +196,8 @@ static const Button buttons[] = {
 	{ ClkLayoutParam,       0,              Button4,        setmfact,       {.f = +0.01} },
 	{ ClkLayoutParam,       0,              Button5,        setmfact,       {.f = -0.01} },
 	{ ClkWorkspace,         0,              Button1,        ws_select,      {0} },
-	{ ClkWorkspace,         0,              Button2,        ws_client,      {0} },
-	{ ClkWorkspace,         0,              Button3,        ws_client,      {0} },
+	{ ClkWorkspace,         0,              Button2,        ws_move_client, {0} },
+	{ ClkWorkspace,         0,              Button3,        ws_move_client, {0} },
 	{ ClkWorkspace,         0,              Button4,        ws_adjacent,    {.i = -1} },
 	{ ClkWorkspace,         0,              Button5,        ws_adjacent,    {.i = +1} },
 	{ ClkClients,           0,              Button4,        focusstack,     {.i = -1} },
