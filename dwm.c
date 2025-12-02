@@ -68,7 +68,7 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkFolder, ClkLayout, ClkLayoutParam, ClkWorkspace, ClkClients,
 	   ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
-enum { BarModeWorkspace, BarModeClients, BarModeDWM };
+enum { BarModeWorkspace, BarModeClients, BarModeStatus };
 
 typedef union {
 	int i;
@@ -165,6 +165,7 @@ static void cleanupmon(Monitor *mon);
 static void clientmessage(XEvent *e);
 static void client_select(const Arg *arg);
 static void client_stack(const Arg *arg);
+static void client_traverse(const Arg *arg);
 static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
@@ -536,6 +537,122 @@ _folder_tail(Monitor *m)
 	return f;
 }
 
+void
+_client_focus(Client *c)
+{
+	if (!c)
+		return;
+
+	Folder *f = c->ws->folder;
+	if (f != selmon->curfldr) {
+		selmon->prevfldr = selmon->curfldr;
+		selmon->curfldr = f;
+	}
+	if (c->ws != f->curws) {
+		f->prevws = f->curws;
+		f->curws = c->ws;
+	}
+
+	focus(c);
+	arrange(selmon);
+}
+
+Client *
+_client_search_w(Workspace *w)
+{
+	for (; w; w = w->next) {
+		Client *c = selmon->clients;
+		for (; c; c = c->next)
+			if (c->ws == w)
+				return c;
+	}
+
+	return NULL;
+}
+
+Client *
+_client_search_f(Folder *f)
+{
+	Client *c = NULL;
+
+	for (; f; f = f->next) {
+		if ((c = _client_search_w(f->wss)))
+			return c;
+	}
+
+	return c;
+}
+
+Client *
+_client_traverse_f(Monitor *m)
+{
+	if (!m)
+		return NULL;
+
+	Client *c;
+	Workspace *w;
+	Folder *f;
+
+	if (m->sel) {
+		c = m->sel->next;
+		w = m->sel->ws;
+		f = w->folder;
+	} else {
+		c = m->clients;
+		w = m->curfldr->curws;
+		f = m->curfldr;
+	}
+
+	for (; c; c = c->next)
+		if (c->ws == w)
+			return c;
+
+	if ((c = _client_search_w(w->next)))
+		return c;
+
+	if ((c = _client_search_f(f->next)))
+		return c;
+
+	return _client_search_f(m->folders);
+}
+
+Client *
+_client_traverse_b(Monitor *m)
+{
+	if (!m)
+		return NULL;
+
+	Client *c, *cand = NULL;
+	Workspace *w;
+	Folder *f;
+
+	const Client *cc = m->sel;
+	const Workspace *cw = cc ? cc->ws : m->curfldr->curws;
+
+	for (c = m->clients; c && c != cc; c = c->next)
+		if (c->ws == cw)
+			cand = c;
+	if (cand)
+		return cand;
+
+	for (f = m->folders; f; f = f->next) {
+		for (w = f->wss; w; w = w->next) {
+			if (w == cw) {
+				if (cand)
+					return cand;
+
+				continue;
+			}
+			for (c = m->clients; c; c = c->next) {
+				if (c->ws == w)
+					cand = c;
+			}
+		}
+	}
+
+	return cand;
+}
+
 /* function implementations */
 void
 applyrules(Client *c)
@@ -678,7 +795,11 @@ attachstack(Client *c)
 void
 banish_pointer(const Arg *arg)
 {
-	XWarpPointer(dpy, None, root, 0, 0, 0, 0, selmon->mw, TOPBAR ? 0 : selmon->mh);
+	if (!arg)
+		return;
+
+	XWarpPointer(dpy, None, root, 0, 0, 0, 0,
+				 arg->i > 0 ? selmon->mw : 0, TOPBAR ? 0 : selmon->mh);
     XFlush(dpy);
 }
 
@@ -915,6 +1036,22 @@ client_stack(const Arg *arg)
 	}
 
 	arrange(selmon);
+}
+
+void
+client_traverse(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	Client *c;
+	if (arg->i > 0) {
+		c = _client_traverse_f(selmon);
+	} else {
+		c = _client_traverse_b(selmon);
+	}
+
+	_client_focus(c);
 }
 
 void
@@ -1288,7 +1425,7 @@ drawbar(Monitor *m)
 			c->barx = x;
 		}
 		break;
-	case BarModeDWM:
+	case BarModeStatus:
 		w = ws_area_w;
 		drw_setscheme(drw, scheme[SchemeNormal]);
 		drw_text(drw, x, 0, w, bh, lrpad_2, stext, 0);
@@ -2161,7 +2298,7 @@ sendmon(Client *c, Monitor *m)
 void
 setbarmode(const Arg *arg)
 {
-	if (!arg || arg->i < 0 || arg->i > BarModeDWM)
+	if (!arg || arg->i < 0 || arg->i > BarModeStatus)
 		return;
 
 	selmon->barmode = arg->i;
@@ -2730,7 +2867,7 @@ updatestatus(void)
 	if (!gettextprop(root, XA_WM_NAME, stext, sizeof(stext)))
 		strcpy(stext, "");
 
-	if (selmon->barmode == BarModeDWM)
+	if (selmon->barmode == BarModeStatus)
 		drawbar(selmon);
 }
 
@@ -2929,21 +3066,7 @@ ws_select_urg(const Arg *arg)
 		if (c->isurgent && c != selmon->sel)
 			break;
 
-	if (!c)
-		return;
-
-	Folder *f = c->ws->folder;
-	if (f != selmon->curfldr) {
-		selmon->prevfldr = selmon->curfldr;
-		selmon->curfldr = f;
-	}
-	if (c->ws != f->curws) {
-		f->prevws = f->curws;
-		f->curws = c->ws;
-	}
-
-	focus(c);
-	arrange(selmon);
+	_client_focus(c);
 }
 
 void
