@@ -10,7 +10,7 @@
 #define SNAP_PX           16    /* snap pixel */
 #define SHOWBAR           1     /* 0 means no bar */
 #define TOPBAR            1     /* 0 means bottom bar */
-#define BAR_FOLDER_MAX    5
+#define BAR_GROUP_MAX     5
 #define BAR_WS_MAX        9
 
 /* appearance */
@@ -39,7 +39,7 @@ static const char *colors[][3]      = {
 	[SchemeNormal]   = { col_white2,   col_black2,   col_bdr0 },
 	[SchemeCurrent]  = { col_blue,     col_black1,   col_bdr1 },
 	[SchemePrevious] = { col_purple,   col_black2,   col_bdr1 },
-	[SchemeFolder]   = { col_emerald,  col_black2,   col_bdr1 },
+	[SchemeGroup]    = { col_emerald,  col_black2,   col_bdr1 },
 	[SchemeCLabel]   = { col_white1,   col_black3,   col_bdr1 },
 	[SchemeUrgent]   = { col_white2,   col_black2,   col_bdr1 },
 	[SchemeLayout]   = { col_green,    col_black2,   col_bdr0 },
@@ -77,8 +77,8 @@ static const char *clabels[] = {
 	{ MODKEY|Mod1Mask,            KEY,      ws_move_client, {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,      ws_remove,      {.i =  IDX} },
 #define TAGKEYS(KEY,IDX) \
-	{ MODKEY,                     KEY,      folder_select,  {.i =  IDX} }, \
-	{ MODKEY|ShiftMask,           KEY,      ws_move_folder, {.i =  IDX} },
+	{ MODKEY,                     KEY,      group_select,   {.i =  IDX} }, \
+	{ MODKEY|ShiftMask,           KEY,      ws_move_group,  {.i =  IDX} },
 #define CLIENTKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,      client_select,  {.i =  IDX} },
 
@@ -107,9 +107,9 @@ static const Key keys[] = {
 	{ MODKEY,                   XK_comma,      togglebar,       {0} },
 	{ MODKEY,                  XK_period,      ws_select_urg,   {0} },
 	{ MODKEY,                     XK_Tab,      ws_select,       {.i =  0} },
-	{ MODKEY|Mod1Mask,            XK_Tab,      folder_select,   {.i =  0} },
+	{ MODKEY|Mod1Mask,            XK_Tab,      group_select,    {.i =  0} },
 	{ MODKEY,                   XK_slash,      ws_select,       {.i = -1} },
-	{ MODKEY|Mod1Mask,          XK_slash,      folder_select,   {.i = -1} },
+	{ MODKEY|Mod1Mask,          XK_slash,      group_select,    {.i = -1} },
 	{ MODKEY|ShiftMask,         XK_slash,      client_select,   {.i = -1} },
 	{ MODKEY,             XK_bracketleft,      client_traverse, {.i = -1} },
 	{ MODKEY,            XK_bracketright,      client_traverse, {.i = +1} },
@@ -121,17 +121,17 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_g,      setlayout,       {.i = 2} },
 	{ MODKEY,                       XK_a,      ws_add,          {0} },
 	{ MODKEY|ShiftMask,             XK_a,      ws_move_client,  {.i =  0} },
-	{ MODKEY|Mod1Mask,              XK_a,      folder_add,      {0} },
+	{ MODKEY|Mod1Mask,              XK_a,      group_add,       {0} },
 	{ MODKEY,                       XK_r,      ws_remove,       {.i =  0} },
 	{ MODKEY|ShiftMask,             XK_r,      ws_remove,       {.i = -1} },
 	{ MODKEY,                       XK_s,      banish_pointer,  {.i = -1} },
 	{ MODKEY,                       XK_d,      banish_pointer,  {.i = +1} },
-	{ MODKEY,                       XK_y,      folder_adjacent, {.i = -1} },
-	{ MODKEY|ShiftMask,             XK_y,      folder_swap,     {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_y,      folder_stack,    {.i = +1} },
-	{ MODKEY,                       XK_o,      folder_adjacent, {.i = +1} },
-	{ MODKEY|ShiftMask,             XK_o,      folder_swap,     {.i = +1} },
-	{ MODKEY|Mod1Mask,              XK_o,      folder_stack,    {.i = -1} },
+	{ MODKEY,                       XK_y,      group_adjacent,  {.i = -1} },
+	{ MODKEY|ShiftMask,             XK_y,      group_swap,      {.i = -1} },
+	{ MODKEY|Mod1Mask,              XK_y,      group_stack,     {.i = +1} },
+	{ MODKEY,                       XK_o,      group_adjacent,  {.i = +1} },
+	{ MODKEY|ShiftMask,             XK_o,      group_swap,      {.i = +1} },
+	{ MODKEY|Mod1Mask,              XK_o,      group_stack,     {.i = -1} },
 	{ MODKEY,                       XK_u,      ws_adjacent,     {.i = -1} },
 	{ MODKEY|ShiftMask,             XK_u,      ws_swap,         {.i = -1} },
 	{ MODKEY|Mod1Mask,              XK_u,      ws_stack,        {.i = +1} },
