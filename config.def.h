@@ -99,6 +99,7 @@ static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function              argument */
+	{ MODKEY|Mod1Mask,         XK_Escape,      killclient,           {0} },
 	{ MODKEY,                       XK_p,      spawn,                {.v = dmenucmd} },
 	{ MODKEY|ShiftMask,             XK_p,      spawn,                {.v = pavucmd} },
 	{ MODKEY|ShiftMask,        XK_Return,      spawn,                {.v = termcmd} },
@@ -183,8 +184,6 @@ static const Key keys[] = {
 	CLIENTKEYS(                     XK_b,                            5)
 	CLIENTKEYS(                     XK_n,                            6)
 	CLIENTKEYS(                     XK_m,                            7)
-	{ MODKEY|Mod1Mask,                       XK_Escape,  killclient, {0} },
-	{ MODKEY|ShiftMask|ControlMask|Mod1Mask, XK_Escape,  quit,       {0} },
 };
 
 /* button definitions */
