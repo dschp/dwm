@@ -1273,7 +1273,7 @@ desktop_select(const Arg *arg)
 		d = g->prevdsk;
 	}
 
-	if (d == g->curdsk)
+	if (!d || d == g->curdsk)
 		return;
 
 	g->prevdsk = g->curdsk;
