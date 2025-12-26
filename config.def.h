@@ -1,17 +1,18 @@
 /* See LICENSE file for copyright and license details. */
 
 /* constants */
-#define MFACT             0.50  /* factor of master area size [0.05..0.95] */
 #define NMASTER           1     /* number of clients in master area */
+#define MFACT             0.50  /* factor of master area size [0.05..0.95] */
+#define SHOWBAR           1     /* 0 means no bar */
 #define RESIZEHINTS       0     /* 1 means respect size hints in tiled resizals */
 #define LOCKFULLSCREEN    1     /* 1 will force focus on the fullscreen window */
 #define REFRESH_RATE      120    /* refresh rate (per second) for client move/resize */
 #define BORDER_PX         1     /* border pixel of windows */
 #define SNAP_PX           16    /* snap pixel */
-#define SHOWBAR           1     /* 0 means no bar */
 #define TOPBAR            1     /* 0 means bottom bar */
-#define BAR_GROUP_MAX     5
+#define BAR_CLASS_MAX     5
 #define BAR_DESKTOP_MAX   9
+#define BAR_CLIENT_MAX    6
 
 /* appearance */
 static const char *fonts[]          = { "sans-serif:size=11" };
@@ -39,8 +40,8 @@ static const char *colors[][3]      = {
 	[SchemeNormal]   = { col_white2,   col_black2,   col_bdr0 },
 	[SchemeCurrent]  = { col_blue,     col_black1,   col_bdr1 },
 	[SchemePrevious] = { col_purple,   col_black2,   col_bdr1 },
-	[SchemeGroup]    = { col_emerald,  col_black2,   col_bdr1 },
-	[SchemeCLabel]   = { col_white1,   col_black3,   col_bdr1 },
+	[SchemeClass]    = { col_emerald,  col_black2,   col_bdr1 },
+	[SchemeClntLbl]  = { col_white1,   col_black3,   col_bdr1 },
 	[SchemeUrgent]   = { col_white2,   col_black2,   col_bdr1 },
 	[SchemeLayout]   = { col_green,    col_black2,   col_bdr0 },
 	[SchemeNmaster]  = { col_red,      col_black2,   col_bdr0 },
@@ -53,7 +54,16 @@ static const Rule rules[] = {
 	 *	WM_NAME(STRING) = title
 	 */
 	/* class      instance    title      isfloating    monitor */
-	{ "Dummy",    NULL,       NULL,      1,            -1 },
+	//{ "name",     NULL,       NULL,      1,            -1 },
+	0
+};
+
+static const ClassRule crules[] = {
+	/* class                        rename       nmaster  mnact  showbar  layout */
+	{ "st-256color",                "st",      { NMASTER, MFACT, SHOWBAR,      0} },
+	{ "firefox",                    "Firefox", { NMASTER, MFACT, SHOWBAR,      1} },
+	{ "Brave-browser",              "Brave",   { NMASTER, MFACT, SHOWBAR,      1} },
+	{ "install4j-jclient-Launcher", "ibkr",    { NMASTER, MFACT, SHOWBAR,      1} },
 };
 
 /* layouts */
@@ -76,9 +86,8 @@ static const char *clabels[] = {
 	{ MODKEY|ShiftMask,           KEY,   desktop_move_client,  {.i =  IDX} }, \
 	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,   desktop_remove,       {.i =  IDX} },
-#define TAGKEYS(KEY,IDX) \
-	{ MODKEY,                     KEY,   group_select,         {.i =  IDX} }, \
-	{ MODKEY|ShiftMask,           KEY,   desktop_move_group,   {.i =  IDX} },
+#define CLASSKEYS(KEY,IDX) \
+	{ MODKEY,                     KEY,   class_select,         {.i =  IDX} },
 #define CLIENTKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   client_select,        {.i =  IDX} },
 
@@ -99,6 +108,7 @@ static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function              argument */
+	{ MODKEY|ShiftMask,        XK_Escape,      quit,                 {0} },
 	{ MODKEY|Mod1Mask,         XK_Escape,      killclient,           {0} },
 	{ MODKEY,                       XK_p,      spawn,                {.v = dmenucmd} },
 	{ MODKEY|ShiftMask,             XK_p,      spawn,                {.v = pavucmd} },
@@ -106,39 +116,32 @@ static const Key keys[] = {
 	{ MODKEY,                  XK_Return,      zoom,                 {0} },
 	{ MODKEY,                   XK_space,      togglefloating,       {0} },
 	{ MODKEY,                   XK_comma,      togglebar,            {0} },
-	{ MODKEY,                  XK_period,      desktop_select_urg,   {0} },
-	{ MODKEY,                     XK_Tab,      desktop_select,       {.i =  0} },
-	{ MODKEY|Mod1Mask,            XK_Tab,      group_select,         {.i =  0} },
-	{ MODKEY,                   XK_slash,      desktop_select,       {.i = -1} },
-	{ MODKEY|Mod1Mask,          XK_slash,      group_select,         {.i = -1} },
-	{ MODKEY|ShiftMask,         XK_slash,      client_select,        {.i = -1} },
-	{ MODKEY,             XK_bracketleft,      client_traverse,      {.i = -1} },
-	{ MODKEY,            XK_bracketright,      client_traverse,      {.i = +1} },
-	{ MODKEY,                       XK_q,      setbarmode,           {.i = BarModeDesktop} },
-	{ MODKEY,                       XK_w,      setbarmode,           {.i = BarModeClients} },
-	{ MODKEY,                       XK_e,      setbarmode,           {.i = BarModeStatus} },
-	{ MODKEY,                       XK_t,      setlayout,            {.i = 0} },
-	{ MODKEY,                       XK_f,      setlayout,            {.i = 1} },
-	{ MODKEY,                       XK_g,      setlayout,            {.i = 2} },
-	{ MODKEY,                       XK_a,      desktop_add,          {0} },
-	{ MODKEY|ShiftMask,             XK_a,      desktop_move_client,  {.i =  0} },
-	{ MODKEY|Mod1Mask,              XK_a,      group_add,            {0} },
-	{ MODKEY,                       XK_r,      desktop_remove,       {.i =  0} },
-	{ MODKEY|ShiftMask,             XK_r,      desktop_remove,       {.i = -1} },
-	{ MODKEY,                       XK_s,      banish_pointer,       {.i = -1} },
-	{ MODKEY,                       XK_d,      banish_pointer,       {.i = +1} },
-	{ MODKEY,                       XK_y,      group_adjacent,       {.i = -1} },
-	{ MODKEY|ShiftMask,             XK_y,      group_swap,           {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_y,      group_stack,          {.i = +1} },
-	{ MODKEY,                       XK_o,      group_adjacent,       {.i = +1} },
-	{ MODKEY|ShiftMask,             XK_o,      group_swap,           {.i = +1} },
-	{ MODKEY|Mod1Mask,              XK_o,      group_stack,          {.i = -1} },
-	{ MODKEY,                       XK_u,      desktop_adjacent,     {.i = -1} },
-	{ MODKEY|ShiftMask,             XK_u,      desktop_swap,         {.i = -1} },
-	{ MODKEY|Mod1Mask,              XK_u,      desktop_stack,        {.i = +1} },
-	{ MODKEY,                       XK_i,      desktop_adjacent,     {.i = +1} },
-	{ MODKEY|ShiftMask,             XK_i,      desktop_swap,         {.i = +1} },
-	{ MODKEY|Mod1Mask,              XK_i,      desktop_stack,        {.i = -1} },
+	{ MODKEY,                     XK_Tab,      do_select,            {.i =  0} },
+	{ MODKEY,                   XK_slash,      client_select ,       {.i = -1} },
+	{ MODKEY,                  XK_period,      client_select_urg,    {0} },
+	{ MODKEY,              XK_apostrophe,      banish_pointer,       {.i = -1} },
+	{ MODKEY|ShiftMask,    XK_apostrophe,      banish_pointer,       {.i = +1} },
+	{ MODKEY,                    XK_Left,      setlayout,            {.i = 0} },
+	{ MODKEY,                      XK_Up,      setlayout,            {.i = 1} },
+	{ MODKEY,                    XK_Down,      setlayout,            {.i = 2} },
+	{ MODKEY,                   XK_Right,      setlayout,            {.i = 3} },
+	{ MODKEY|ShiftMask,          XK_Left,      setbarmode,           {.i = BarModeSelClient} },
+	{ MODKEY|ShiftMask,            XK_Up,      setbarmode,           {.i = BarModeClients} },
+	{ MODKEY|ShiftMask,          XK_Down,      setbarmode,           {.i = BarModeStatus} },
+	{ MODKEY|ShiftMask,         XK_Right,      setbarmode,           {.i = BarModeSelClient} },
+	{ MODKEY,                   XK_equal,      desktop_add,          {0} },
+	{ MODKEY|ShiftMask,         XK_equal,      desktop_move_client,  {.i =  0} },
+	{ MODKEY,                   XK_minus,      desktop_remove,       {.i =  0} },
+	{ MODKEY|Mod1Mask,          XK_minus,      desktop_remove,       {.i = -1} },
+	{ MODKEY|ShiftMask,         XK_minus,      desktop_remove_force, {.i =  0} },
+	{ MODKEY,                       XK_y,      do_select,            {.i = +1} },
+	{ MODKEY|ShiftMask,             XK_y,      do_stack,             {.i = +1} },
+	{ MODKEY,                       XK_u,      do_adjacent,          {.i = -1} },
+	{ MODKEY|ShiftMask,             XK_u,      do_swap,              {.i = -1} },
+	{ MODKEY,                       XK_i,      do_adjacent,          {.i = +1} },
+	{ MODKEY|ShiftMask,             XK_i,      do_swap,              {.i = +1} },
+	{ MODKEY,                       XK_o,      do_select,            {.i = -1} },
+	{ MODKEY|ShiftMask,             XK_o,      do_stack,             {.i = -1} },
 	{ MODKEY,                       XK_j,      focusstack,           {.i = +1} },
 	{ MODKEY,                       XK_k,      focusstack,           {.i = -1} },
 	{ MODKEY|ShiftMask,             XK_j,      movestack,            {.i = +1} },
@@ -151,10 +154,10 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_l,      setmfact,             {.f = +0.05} },
 	{ MODKEY|ControlMask,           XK_h,      setmfact,             {.f = -0.01} },
 	{ MODKEY|ControlMask,           XK_l,      setmfact,             {.f = +0.01} },
-	{ MODKEY,                   XK_minus,      focusmon,             {.i = -1} },
-	{ MODKEY,                   XK_equal,      focusmon,             {.i = +1} },
-	{ MODKEY|ShiftMask,         XK_minus,      tagmon,               {.i = +1} },
-	{ MODKEY|ShiftMask,         XK_equal,      tagmon,               {.i = -1} },
+	{ MODKEY,                    XK_Home,      focusmon,             {.i = -1} },
+	{ MODKEY,                     XK_End,      focusmon,             {.i = +1} },
+	{ MODKEY|ShiftMask,          XK_Home,      tagmon,               {.i = +1} },
+	{ MODKEY|ShiftMask,           XK_End,      tagmon,               {.i = -1} },
 	WSKEYS(                         XK_1,                            1)
 	WSKEYS(                         XK_2,                            2)
 	WSKEYS(                         XK_3,                            3)
@@ -165,18 +168,18 @@ static const Key keys[] = {
 	WSKEYS(                         XK_8,                            8)
 	WSKEYS(                         XK_9,                            9)
 	WSKEYS(                         XK_0,                           10)
-	TAGKEYS(                       XK_F1,                            1)
-	TAGKEYS(                       XK_F2,                            2)
-	TAGKEYS(                       XK_F3,                            3)
-	TAGKEYS(                       XK_F4,                            4)
-	TAGKEYS(                       XK_F5,                            5)
-	TAGKEYS(                       XK_F6,                            6)
-	TAGKEYS(                       XK_F7,                            7)
-	TAGKEYS(                       XK_F8,                            8)
-	TAGKEYS(                       XK_F9,                            9)
-	TAGKEYS(                      XK_F10,                           10)
-	TAGKEYS(                      XK_F11,                           11)
-	TAGKEYS(                      XK_F12,                           12)
+	CLASSKEYS(                     XK_F1,                            1)
+	CLASSKEYS(                     XK_F2,                            2)
+	CLASSKEYS(                     XK_F3,                            3)
+	CLASSKEYS(                     XK_F4,                            4)
+	CLASSKEYS(                     XK_F5,                            5)
+	CLASSKEYS(                     XK_F6,                            6)
+	CLASSKEYS(                     XK_F7,                            7)
+	CLASSKEYS(                     XK_F8,                            8)
+	CLASSKEYS(                     XK_F9,                            9)
+	CLASSKEYS(                    XK_F10,                           10)
+	CLASSKEYS(                    XK_F11,                           11)
+	CLASSKEYS(                    XK_F12,                           12)
 	CLIENTKEYS(                     XK_z,                            1)
 	CLIENTKEYS(                     XK_x,                            2)
 	CLIENTKEYS(                     XK_c,                            3)
