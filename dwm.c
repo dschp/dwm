@@ -60,6 +60,7 @@
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
+#define TAG_UNIT                1ULL
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
@@ -234,9 +235,9 @@ static void configurerequest(XEvent *e);
 static Monitor *createmon(void);
 static void desktop_add(const Arg *arg);
 static void desktop_adjacent(const Arg *arg);
+static void desktop_merge(const Arg *arg);
 static void desktop_move_client(const Arg *arg);
 static void desktop_remove(const Arg *arg);
-static void desktop_remove_force(const Arg *arg);
 static void desktop_select(const Arg *arg);
 static void desktop_stack(const Arg *arg);
 static void desktop_swap(const Arg *arg);
@@ -297,9 +298,13 @@ static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tag_adjacent(const Arg *arg);
+static void tag_insert(const Arg *arg);
+static void tag_remove(const Arg *arg);
 static void tag_select(const Arg *arg);
 static void tag_select_headtail(const Arg *arg);
 static void tag_set(const Arg *arg);
+static void tag_swap(const Arg *arg);
+static void tag_stack(const Arg *arg);
 static void tag_toggle_c(const Arg *arg);
 static void tag_toggle_m(const Arg *arg);
 static void tile(Monitor *m);
@@ -1264,6 +1269,14 @@ desktop_adjacent(const Arg *arg)
 }
 
 void
+desktop_merge(const Arg *arg)
+{
+	if (!arg)
+		return;
+	_desktop_delete(selmon, arg->i, 0);
+}
+
+void
 desktop_move_client(const Arg *arg)
 {
 	Client *c = selmon->sel;
@@ -1298,15 +1311,7 @@ desktop_remove(const Arg *arg)
 {
 	if (!arg)
 		return;
-	_desktop_delete(selmon, arg->i, 0);
-}
-
-void
-desktop_remove_force(const Arg *arg)
-{
-	if (!arg)
-		return;
-	_desktop_delete(selmon, arg->i, 1);
+	_desktop_delete(selmon, 0, arg->i > 0 ? 0 : 1);
 }
 
 void
@@ -1637,7 +1642,7 @@ drawbar(Monitor *m)
 			m->x_tag_ellipsis_l = 0;
 		}
 
-		tag_t t = 1ULL << start;
+		tag_t t = TAG_UNIT << start;
 		for (i = start; i < end; i++, t <<= 1) {
 			int s_idx = t & occ ? SchemeTag : SchemeNormal;
 			int invert = 0;
@@ -1901,6 +1906,9 @@ dwim_stack(const Arg *arg)
 	case ViewDesktop:
 		desktop_stack(arg);
 		break;
+	case ViewTag:
+		tag_stack(arg);
+		break;
 	}
 }
 
@@ -1913,6 +1921,9 @@ dwim_swap(const Arg *arg)
 		break;
 	case ViewDesktop:
 		desktop_swap(arg);
+		break;
+	case ViewTag:
+		tag_swap(arg);
 		break;
 	}
 }
@@ -3018,6 +3029,81 @@ tag_adjacent(const Arg *arg)
 }
 
 void
+tag_insert(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	int pos = 0;
+	if (arg->i > 0) {
+		tag_t occ = 0;
+		for (Client *c = selmon->clients; c; c = c->next)
+			occ |= c->tags;
+
+		pos = occ == 0 ? 0 : (int)log2(occ) + 1;
+		if (pos > sizeof(tag_t) * 8 - 1) {
+			pos = sizeof(tag_t) * 8 - 1;
+			int mask = ~(TAG_UNIT << pos);
+			for (Client *c = selmon->clients; c; c = c->next)
+				c->tags &= mask;
+		}
+	} else {
+		for (Client *c = selmon->clients; c; c = c->next)
+			if (c->tags & TAG_UNIT) {
+				for (Client *c = selmon->clients; c; c = c->next)
+					c->tags <<= 1;
+				break;
+			}
+	}
+
+	tag_t t = TAG_UNIT << pos;
+	if (t != selmon->curtags) {
+		selmon->prevtags = selmon->curtags;
+		selmon->curtags = t;
+	}
+	selmon->viewmode = ViewTag;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
+tag_remove(const Arg *arg)
+{
+	if (!arg || selmon->viewmode != ViewTag)
+		return;
+
+	tag_t t = selmon->curtags;
+	if (!t)
+		return;
+
+	if (arg->i > 0) {
+		for (Client *c = selmon->clients; c; c = c->next)
+			if (t & c->tags)
+				return;
+	}
+
+	int msb = (int)log2(t);
+	while (1) {
+		for (Client *c = selmon->clients; c; c = c->next) {
+			tag_t leftmask = c->tags >> (msb + 1) << msb;
+			tag_t rightmask = c->tags & ((TAG_UNIT << msb) - 1);
+			c->tags = leftmask | rightmask;
+		}
+
+		t &= ~(TAG_UNIT << msb);
+		if (!t)
+			break;
+		msb = (int)log2(t);
+	}
+
+	selmon->curtags = TAG_UNIT;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
 tag_select(const Arg *arg)
 {
 	if (!arg)
@@ -3054,7 +3140,7 @@ tag_select_headtail(const Arg *arg)
 	else {
 		for (Client *c = selmon->clients; c; c = c->next)
 			t |= c->tags;
-		t = 1ULL << (int)log2(t);
+		t = TAG_UNIT << (int)log2(t);
 	}
 
 	if (t == selmon->curtags)
@@ -3080,6 +3166,131 @@ tag_set(const Arg *arg)
 		focus(NULL);
 		arrange(selmon);
 	} else {
+		drawbar(selmon);
+	}
+}
+
+void
+tag_stack(const Arg *arg)
+{
+	if (!arg || selmon->viewmode != ViewTag)
+		return;
+
+	tag_t t = selmon->curtags;
+	if (!t)
+		return;
+
+	if (arg->i > 0) {
+		while ((t & (t + 1))) {
+			int msb = (int)log2(t);
+
+			for (Client *c = selmon->clients; c; c = c->next) {
+				tag_t bit = (c->tags >> msb) & TAG_UNIT;
+
+				tag_t leftmask = c->tags >> (msb + 1) << msb;
+				tag_t rightmask = c->tags & ((TAG_UNIT << msb) - 1);
+				c->tags = bit | ((leftmask | rightmask) << 1);
+			}
+
+			tag_t leftmask = t >> (msb + 1) << msb;
+			tag_t rightmask = t & ((TAG_UNIT << msb) - 1);
+			t = TAG_UNIT | ((leftmask | rightmask) << 1);
+		}
+	} else {
+		tag_t occ = 0;
+		for (Client *c = selmon->clients; c; c = c->next)
+			occ |= c->tags;
+		if (!occ)
+			return;
+		int msb = (int)log2(occ);
+
+		while (1) {
+			int lsb = (int)log2(t & -t);
+			tag_t mask1 = (TAG_UNIT << (msb + 1)) - 1;
+			tag_t mask2 = (TAG_UNIT << lsb) - 1;
+			if (t == mask1 - mask2)
+				break;
+
+			for (Client *c = selmon->clients; c; c = c->next) {
+				tag_t bit = ((c->tags >> lsb) & TAG_UNIT) << msb;
+
+				tag_t leftmask = c->tags >> (lsb + 1) << lsb;
+				tag_t rightmask = c->tags & ((TAG_UNIT << lsb) - 1);
+				c->tags = bit | leftmask | rightmask;
+			}
+
+			tag_t leftmask = t >> (lsb + 1) << lsb;
+			tag_t rightmask = t & ((TAG_UNIT << lsb) - 1);
+			t = (TAG_UNIT << msb) | leftmask | rightmask;
+		}
+	}
+
+	if (t != selmon->curtags) {
+		selmon->curtags = t;
+		drawbar(selmon);
+	}
+}
+
+void
+tag_swap(const Arg *arg)
+{
+	if (!arg || selmon->viewmode != ViewTag)
+		return;
+
+	tag_t t = selmon->curtags;
+	if (!t)
+		return;
+
+	if (arg->i > 0) {
+		int msb = (int)log2(t);
+		if (msb == sizeof(tag_t) * 8 - 1)
+			return;
+
+		while (1) {
+			for (Client *c = selmon->clients; c; c = c->next) {
+				int b1 = (c->tags >> msb) & TAG_UNIT;
+				int b2 = (c->tags >> (msb + 1)) & TAG_UNIT;
+
+				if (b1 != b2) {
+					int mask = (TAG_UNIT << msb) | (TAG_UNIT << (msb + 1));
+					c->tags ^= mask;
+				}
+			}
+
+			t &= ~(TAG_UNIT << msb);
+			if (!t)
+				break;
+			msb = (int)log2(t);
+		}
+
+		t = selmon->curtags << 1;
+	} else {
+		int lsb = (int)log2(t & -t);
+		if (lsb == 0)
+			return;
+
+		while (1) {
+			for (Client *c = selmon->clients; c; c = c->next) {
+				int b1 = (c->tags >> lsb) & TAG_UNIT;
+				int b2 = (c->tags >> (lsb - 1)) & TAG_UNIT;
+
+				if (b1 != b2) {
+					int mask = (TAG_UNIT << lsb) | (TAG_UNIT << (lsb - 1));
+					c->tags ^= mask;
+				}
+			}
+
+			t &= ~(TAG_UNIT << lsb);
+			if (!t)
+				break;
+			lsb = (int)log2(t & -t);
+		}
+
+		t = selmon->curtags >> 1;
+	}
+
+	if (t != selmon->curtags) {
+		selmon->curtags = t;
 		drawbar(selmon);
 	}
 }
@@ -3366,7 +3577,7 @@ updatenumlockmask(void)
 		for (j = 0; j < modmap->max_keypermod; j++)
 			if (modmap->modifiermap[i * modmap->max_keypermod + j]
 				== XKeysymToKeycode(dpy, XK_Num_Lock))
-				numlockmask = (1ULL << i);
+				numlockmask = (1 << i);
 	XFreeModifiermap(modmap);
 }
 
