@@ -1,9 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
 /* constants */
-#define NMASTER           1     /* number of clients in master area */
-#define MFACT             0.50  /* factor of master area size [0.05..0.95] */
-#define SHOWBAR           1     /* 0 means no bar */
 #define RESIZEHINTS       0     /* 1 means respect size hints in tiled resizals */
 #define LOCKFULLSCREEN    1     /* 1 will force focus on the fullscreen window */
 #define REFRESH_RATE      120    /* refresh rate (per second) for client move/resize */
@@ -13,6 +10,9 @@
 #define BAR_CLASS_MAX     5
 #define BAR_DESKTOP_MAX   9
 #define BAR_CLIENT_MAX    6
+#define BAR_CLIENT_WIDTH  150
+#define BAR_URGENT_MAX    3
+#define BAR_URGENT_WIDTH  100
 
 /* appearance */
 static const char *fonts[]          = { "sans-serif:size=11" };
@@ -29,18 +29,15 @@ static const char col_red[]         = "#f32f7c";
 static const char col_green[]       = "#afff00";
 static const char col_blue[]        = "#00bbff";
 static const char col_yellow[]      = "#ffff00";
-static const char col_purple[]      = "#be2df1";
-static const char col_cyan[]        = "#005577";
-static const char col_orange[]      = "#ffcc35";
 static const char col_emerald[]     = "#00f2ae";
 static const char col_dmenu_selbg[] = "#0077cc";
 
 static const char *colors[][3]      = {
 	/*                   fg            bg            border   */
 	[SchemeNormal]   = { col_white2,   col_black2,   col_bdr0 },
-	[SchemeCurrent]  = { col_blue,     col_black1,   col_bdr1 },
-	[SchemePrevious] = { col_purple,   col_black2,   col_bdr1 },
 	[SchemeClass]    = { col_emerald,  col_black2,   col_bdr1 },
+	[SchemeDesktop]  = { col_blue,     col_black1,   col_bdr1 },
+	[SchemeTag]      = { col_red,      col_black2,   col_bdr1 },
 	[SchemeClntLbl]  = { col_white1,   col_black3,   col_bdr1 },
 	[SchemeUrgent]   = { col_white2,   col_black2,   col_bdr1 },
 	[SchemeLayout]   = { col_green,    col_black2,   col_bdr0 },
@@ -53,18 +50,26 @@ static const Rule rules[] = {
 	 *	WM_CLASS(STRING) = instance, class
 	 *	WM_NAME(STRING) = title
 	 */
-	/* class      instance    title      isfloating    monitor */
-	//{ "name",     NULL,       NULL,      1,            -1 },
+	/* class      instance    title       tags mask     isfloating   monitor */
 	0
+	/*
+	{ "Gimp",     NULL,       NULL,       0,            1,           -1 },
+	{ "Firefox",  NULL,       NULL,       1 << 8,       0,           -1 },
+	*/
 };
 
 static const ClassRule crules[] = {
-	/* class                        rename       nmaster  mnact  showbar  layout */
-	{ "st-256color",                "st",      { NMASTER, MFACT, SHOWBAR,      0} },
-	{ "firefox",                    "Firefox", { NMASTER, MFACT, SHOWBAR,      1} },
-	{ "Brave-browser",              "Brave",   { NMASTER, MFACT, SHOWBAR,      1} },
-	{ "install4j-jclient-Launcher", "ibkr",    { NMASTER, MFACT, SHOWBAR,      1} },
+	/* class                        rename       nmaster  mfact  showbar  lt_idx */
+	{ "st-256color",                "st",        {     1,   0.5,       1,      0} },
+	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      1} },
+	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      1} },
+	{ "install4j-jclient-Launcher", "ibkr",      {     1,   0.5,       1,      1} },
 };
+
+/* preallocated layout params                  nmaster  mfact  showbar  lt_idx */
+const static LayoutParams default_lt_params  = {     1,   0.5,       1,      0 };
+static LayoutParams fallback_lt_params       = {     1,   0.5,       1,      0 };
+static LayoutParams urgent_lt_params         = {     1,   0.5,       1,      1 };
 
 /* layouts */
 static const Layout layouts[] = {
@@ -72,6 +77,7 @@ static const Layout layouts[] = {
 	{ "[]=",      tile },    /* first entry is default */
 	{ "[M]",      monocle },
 	{ "><>",      NULL },    /* no layout function means floating behavior */
+	{ "=[]",      tile },
 };
 
 /* client labels */
@@ -79,15 +85,26 @@ static const char *clabels[] = {
 	"Z", "X", "C", "V", "B", "N", "M",
 };
 
+/* tag labels */
+static const char *tags[] = {
+	"Q", "W", "E", "R", "T",
+	"A", "S", "D", "F", "F",
+};
+
 /* key definitions */
 #define MODKEY Mod4Mask
-#define WSKEYS(KEY,IDX) \
+#define DESKTOPKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   desktop_select,       {.i =  IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   desktop_move_client,  {.i =  IDX} }, \
 	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,   desktop_remove,       {.i =  IDX} },
 #define CLASSKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   class_select,         {.i =  IDX} },
+#define TAGKEYS(KEY,IDX) \
+	{ MODKEY,                     KEY,   tag_select,           {.t = 1ULL << IDX} }, \
+	{ MODKEY|ShiftMask,           KEY,   tag_set,              {.t = 1ULL << IDX} }, \
+	{ MODKEY|Mod1Mask,            KEY,   tag_toggle_c,         {.t = 1ULL << IDX} }, \
+	{ MODKEY|ControlMask,         KEY,   tag_toggle_m,         {.t = 1ULL << IDX} },
 #define CLIENTKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   client_select,        {.i =  IDX} },
 
@@ -117,10 +134,10 @@ static const Key keys[] = {
 	{ MODKEY,                   XK_space,      togglefloating,       {0} },
 	{ MODKEY,                   XK_comma,      togglebar,            {0} },
 	{ MODKEY,                     XK_Tab,      do_select,            {.i =  0} },
-	{ MODKEY,                   XK_slash,      client_select ,       {.i = -1} },
+	{ MODKEY,                   XK_slash,      client_select,        {.i = -1} },
 	{ MODKEY,                  XK_period,      client_select_urg,    {0} },
-	{ MODKEY,              XK_apostrophe,      banish_pointer,       {.i = -1} },
-	{ MODKEY|ShiftMask,    XK_apostrophe,      banish_pointer,       {.i = +1} },
+	{ MODKEY,                   XK_grave,      banish_pointer,       {.i = -1} },
+	{ MODKEY|ShiftMask,         XK_grave,      banish_pointer,       {.i = +1} },
 	{ MODKEY,                    XK_Left,      setlayout,            {.i = 0} },
 	{ MODKEY,                      XK_Up,      setlayout,            {.i = 1} },
 	{ MODKEY,                    XK_Down,      setlayout,            {.i = 2} },
@@ -158,16 +175,16 @@ static const Key keys[] = {
 	{ MODKEY,                     XK_End,      focusmon,             {.i = +1} },
 	{ MODKEY|ShiftMask,          XK_Home,      tagmon,               {.i = +1} },
 	{ MODKEY|ShiftMask,           XK_End,      tagmon,               {.i = -1} },
-	WSKEYS(                         XK_1,                            1)
-	WSKEYS(                         XK_2,                            2)
-	WSKEYS(                         XK_3,                            3)
-	WSKEYS(                         XK_4,                            4)
-	WSKEYS(                         XK_5,                            5)
-	WSKEYS(                         XK_6,                            6)
-	WSKEYS(                         XK_7,                            7)
-	WSKEYS(                         XK_8,                            8)
-	WSKEYS(                         XK_9,                            9)
-	WSKEYS(                         XK_0,                           10)
+	DESKTOPKEYS(                    XK_1,                            1)
+	DESKTOPKEYS(                    XK_2,                            2)
+	DESKTOPKEYS(                    XK_3,                            3)
+	DESKTOPKEYS(                    XK_4,                            4)
+	DESKTOPKEYS(                    XK_5,                            5)
+	DESKTOPKEYS(                    XK_6,                            6)
+	DESKTOPKEYS(                    XK_7,                            7)
+	DESKTOPKEYS(                    XK_8,                            8)
+	DESKTOPKEYS(                    XK_9,                            9)
+	DESKTOPKEYS(                    XK_0,                           10)
 	CLASSKEYS(                     XK_F1,                            1)
 	CLASSKEYS(                     XK_F2,                            2)
 	CLASSKEYS(                     XK_F3,                            3)
@@ -180,6 +197,16 @@ static const Key keys[] = {
 	CLASSKEYS(                    XK_F10,                           10)
 	CLASSKEYS(                    XK_F11,                           11)
 	CLASSKEYS(                    XK_F12,                           12)
+	TAGKEYS(                        XK_q,                            0)
+	TAGKEYS(                        XK_w,                            1)
+	TAGKEYS(                        XK_e,                            2)
+	TAGKEYS(                        XK_r,                            3)
+	TAGKEYS(                        XK_t,                            4)
+	TAGKEYS(                        XK_a,                            5)
+	TAGKEYS(                        XK_s,                            6)
+	TAGKEYS(                        XK_d,                            7)
+	TAGKEYS(                        XK_f,                            8)
+	TAGKEYS(                        XK_g,                            9)
 	CLIENTKEYS(                     XK_z,                            1)
 	CLIENTKEYS(                     XK_x,                            2)
 	CLIENTKEYS(                     XK_c,                            3)

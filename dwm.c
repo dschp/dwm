@@ -50,15 +50,20 @@
 #define CLEANMASK(mask)         (mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
 #define INTERSECT(x,y,w,h,m)    (MAX(0, MIN((x)+(w),(m)->wx+(m)->ww) - MAX((x),(m)->wx)) \
                                * MAX(0, MIN((y)+(h),(m)->wy+(m)->wh) - MAX((y),(m)->wy)))
-#define ISVISIBLE(C)            (C->mon->selmode == SelModeClass ? C->class == C->mon->curcls : C->mon->selmode == SelModeDesktop ? C->desktop == C->mon->curdsk : 0)
+#define ISVISIBLE(C)            (C->mon->viewmode == ViewClass ? C->class == C->mon->curcls \
+								 : C->mon->viewmode == ViewDesktop ? C->desktop == C->mon->curdsk \
+								 : C->mon->viewmode == ViewTag ? C->tags & C->mon->curtags \
+								 : C->mon->viewmode == ViewUrgent ? C->urgent_snapshot \
+								 : 0)
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
+#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNormal, SchemeCurrent, SchemePrevious, SchemeClass,
+enum { SchemeNormal, SchemeClass, SchemeDesktop, SchemeTag,
 	   SchemeClntLbl, SchemeUrgent,
 	   SchemeLayout, SchemeNmaster, SchemeMfact }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
@@ -68,10 +73,13 @@ enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms *
 enum { ClkGroup, ClkLayout, ClkLayoutParam, ClkDesktop, ClkClients,
 	   ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 enum { BarModeSelClient, BarModeClients, BarModeStatus };
-enum { SelModeClass, SelModeDesktop };
+enum { ViewClass, ViewDesktop, ViewTag, ViewUrgent };
+
+typedef uint tag_t;
 
 typedef union {
 	int i;
+	tag_t t;
 	float f;
 	const void *v;
 } Arg;
@@ -103,7 +111,6 @@ struct Class {
 
 	int barx;
 	uint occ;
-	uint urg;
 };
 
 typedef struct {
@@ -131,6 +138,10 @@ struct Client {
 	Monitor *mon;
 	Desktop *desktop;
 	Class *class;
+	tag_t tags;
+	int urgent_snapshot;
+
+	LayoutParams params;
 };
 
 struct Desktop {
@@ -140,7 +151,6 @@ struct Desktop {
 
 	int barx;
 	uint occ;
-	uint urg;
 	char label[16];
 	int w_label;
 };
@@ -164,6 +174,7 @@ struct Monitor {
 	Client *clients, *stack, *sel;
 	Class *curcls, *prevcls;
 	Desktop *desktops, *curdsk, *prevdsk;
+	tag_t curtags, prevtags;
 
 	int num;
 	int by;               /* bar geometry */
@@ -173,7 +184,7 @@ struct Monitor {
 	char ltsymbol[16];
 	int topbar;
 	int barmode;
-	int selmode;
+	int viewmode;
 
 	int x_class_ellipsis_l;
 	int x_class_ellipsis_r;
@@ -190,6 +201,7 @@ typedef struct {
 	const char *class;
 	const char *instance;
 	const char *title;
+	tag_t tags;
 	int isfloating;
 	int monitor;
 } Rule;
@@ -282,6 +294,10 @@ static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
+static void tag_select(const Arg *arg);
+static void tag_set(const Arg *arg);
+static void tag_toggle_c(const Arg *arg);
+static void tag_toggle_m(const Arg *arg);
 static void tile(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
@@ -346,42 +362,42 @@ static Class *classes;
 
 const char ellipsis_l[] = "<";
 const char ellipsis_r[] = ">";
+const char urgent_v[] = "Urg";
 static int w_ellipsis_l, w_ellipsis_r;
+static int w_urgent_v;
 static int w_clabels[LENGTH(clabels)];
 
-void
-_init_layout_params(LayoutParams *p)
-{
-	p->nmaster = NMASTER;
-	p->mfact = MFACT;
-	p->showbar = SHOWBAR;
-	p->sellayout = 0;
-}
+/* compile-time check if all tags fit into an unsigned int bit array. */
+struct NumTags { char limitexceeded[LENGTH(tags) > sizeof(tag_t) * 8 - 1 ? -1 : 1]; };
 
 LayoutParams *
 _layout_params(Monitor *m)
 {
-	switch (m->selmode) {
-	case SelModeClass:
+	switch (m->viewmode) {
+	case ViewClass:
 		if (m->curcls)
 			return &m->curcls->params;
 		break;
-	case SelModeDesktop:
+	case ViewDesktop:
 		if (m->curdsk)
 			return &m->curdsk->params;
 		break;
+	case ViewTag:
+		for (Client *c = m->clients; c; c = c->next)
+			if (c->tags & m->curtags)
+				return &c->params;
+		break;
+	case ViewUrgent:
+		return &urgent_lt_params;
 	}
 
-	return NULL;
+	return &fallback_lt_params;
 }
 
 const Layout *
 _current_layout(Monitor *m)
 {
 	LayoutParams *p = _layout_params(m);
-	if (!p)
-		return NULL;
-
 	return &layouts[p->sellayout];
 }
 
@@ -445,7 +461,7 @@ _class_find_or_create(const char *class)
 	if (params)
 		cls->params = *params;
 	else
-		_init_layout_params(&cls->params);
+		cls->params = default_lt_params;
 
 	return cls;
 }
@@ -456,14 +472,14 @@ _class_select(Class *cls)
 	if (!cls)
 		return;
 	if (cls == selmon->curcls) {
-		if (selmon->selmode == SelModeClass)
+		if (selmon->viewmode == ViewClass)
 			return;
 	} else {
 		selmon->prevcls = selmon->curcls;
 		selmon->curcls = cls;
 	}
 
-	selmon->selmode = SelModeClass;
+	selmon->viewmode = ViewClass;
 
 	focus(NULL);
 	arrange(selmon);
@@ -487,9 +503,9 @@ _desktop_create(Monitor *m)
 
 	m->prevdsk = m->curdsk;
 	m->curdsk = d;
-	m->selmode = SelModeDesktop;
+	m->viewmode = ViewDesktop;
 
-	_init_layout_params(&d->params);
+	d->params = default_lt_params;
 }
 
 void
@@ -503,7 +519,7 @@ _desktop_detach(Monitor *m, Desktop *d)
 void
 _desktop_delete(Monitor *m, int idx, int force)
 {
-	if (!m || m->selmode != SelModeDesktop || !m->desktops)
+	if (!m || m->viewmode != ViewDesktop || !m->desktops)
 		return;
 
 	Desktop *cur = m->curdsk;
@@ -538,7 +554,7 @@ _desktop_delete(Monitor *m, int idx, int force)
 	m->prevdsk = NULL;
 
 	if (!m->desktops)
-		m->selmode = SelModeClass;
+		m->viewmode = ViewClass;
 
 	focus(NULL);
 	arrange(m);
@@ -550,14 +566,14 @@ _desktop_select(Desktop *d)
 	if (!d)
 		return;
 	if (d == selmon->curdsk) {
-		if (selmon->selmode == SelModeDesktop)
+		if (selmon->viewmode == ViewDesktop)
 			return;
 	} else {
 		selmon->prevdsk = selmon->curdsk;
 		selmon->curdsk = d;
 	}
 
-	selmon->selmode = SelModeDesktop;
+	selmon->viewmode = ViewDesktop;
 
 	focus(NULL);
 	arrange(selmon);
@@ -571,22 +587,6 @@ _desktop_tail(Monitor *m)
 	return d;
 }
 
-void
-_client_focus(Client *c)
-{
-	if (!c)
-		return;
-
-	Monitor *m = c->mon;
-	if (c->desktop != m->curdsk) {
-		m->prevdsk = m->curdsk;
-		m->curdsk = c->desktop;
-	}
-
-	focus(c);
-	arrange(m);
-}
-
 /* function implementations */
 void
 applyrules(Client *c, const char *class, const char *instance)
@@ -597,7 +597,7 @@ applyrules(Client *c, const char *class, const char *instance)
 
 	/* rule matching */
 	c->isfloating = 0;
-	c->mon = selmon;
+	c->tags = 0;
 
 	for (i = 0; i < LENGTH(rules); i++) {
 		r = &rules[i];
@@ -606,6 +606,7 @@ applyrules(Client *c, const char *class, const char *instance)
 		&& (!r->instance || strstr(instance, r->instance)))
 		{
 			c->isfloating = r->isfloating;
+			c->tags |= r->tags;
 			for (m = mons; m && m->num != r->monitor; m = m->next);
 			if (m)
 				c->mon = m;
@@ -1064,12 +1065,19 @@ client_select(const Arg *arg)
 void
 client_select_urg(const Arg *arg)
 {
-	Client *c = selmon->clients;
-	for (; c; c = c->next)
-		if (c->isurgent && c != selmon->sel)
-			break;
+	Client *c, *cand = NULL;
+	for (c = selmon->stack; c; c = c->snext) {
+		c->urgent_snapshot = c->isurgent;
+		if (!cand && c->isurgent)
+			cand = c;
+	}
 
-	_client_focus(c);
+	if (!cand)
+		return;
+
+	selmon->viewmode = ViewUrgent;
+	focus(c);
+	arrange(selmon);
 }
 
 void
@@ -1210,7 +1218,7 @@ createmon(void)
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	m->topbar = TOPBAR;
 	m->barmode = BarModeSelClient;
-	m->selmode = SelModeClass;
+	m->viewmode = ViewClass;
 
 	return m;
 }
@@ -1425,10 +1433,65 @@ dirtomon(int dir)
 }
 
 void
+do_adjacent(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_adjacent(arg);
+		break;
+	case ViewDesktop:
+		desktop_adjacent(arg);
+		break;
+	}
+}
+
+void
+do_select(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_select(arg);
+		break;
+	case ViewDesktop:
+		desktop_select(arg);
+		break;
+	case ViewTag:
+		tag_select(arg);
+		break;
+	}
+}
+
+void
+do_stack(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_stack(arg);
+		break;
+	case ViewDesktop:
+		desktop_stack(arg);
+		break;
+	}
+}
+
+void
+do_swap(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_swap(arg);
+		break;
+	case ViewDesktop:
+		desktop_swap(arg);
+		break;
+	}
+}
+
+void
 drawbar(Monitor *m)
 {
 	LayoutParams *p = _layout_params(m);
-	if (p && !p->showbar)
+	if (!p->showbar)
 		return;
 
 	int x, w, i;
@@ -1441,18 +1504,20 @@ drawbar(Monitor *m)
 	char buf[20];
 
 	for (i = 0, cls = classes; cls; cls = cls->next, i++) {
-		cls->barx = cls->occ = cls->urg = 0;
+		cls->barx = cls->occ = 0;
 		if (cls == m->curcls)
 			cls_idx = i;
 	}
 	const int cls_cnt = i;
 
 	for (i = 0, d = m->desktops; d; d = d->next, i++) {
-		d->barx = d->occ = d->urg = 0;
+		d->barx = d->occ =  0;
 		if (d == m->curdsk)
 			dsk_idx = i;
 	}
 	const int dsk_cnt = i;
+
+	tag_t occ = 0;
 
 	for (i = 0, c = m->clients; c; c = c->next) {
 		if (ISVISIBLE(c)) {
@@ -1465,11 +1530,7 @@ drawbar(Monitor *m)
 		c->class->occ++;
 		if (c->desktop)
 			c->desktop->occ++;
-		if (c->isurgent) {
-			c->class->urg = 1;
-			if (c->desktop)
-				c->desktop->urg = 1;
-		}
+		occ |= c->tags;
 	}
 	const int c_cnt = i;
 
@@ -1506,8 +1567,8 @@ drawbar(Monitor *m)
 		drw_setscheme(drw, scheme[SchemeClass]);
 		for (i = 0; cls && i < BAR_CLASS_MAX; cls = cls->next, i++) {
 			drw_text(drw, x, 0, cls->w_name, bh, lrpad_2, cls->name,
-					 m->selmode == SelModeClass && cls == m->curcls);
-			if (m->selmode != SelModeClass && m->sel && m->sel->class == cls)
+					 m->viewmode == ViewClass && cls == m->curcls);
+			if (m->viewmode != ViewClass && m->sel && m->sel->class == cls)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, 0);
 			x += cls->w_name;
 			cls->barx = x;
@@ -1553,23 +1614,19 @@ drawbar(Monitor *m)
 		}
 
 		for (i++; d && i <= end; d = d->next, i++) {
-			int is_cur = (m->selmode == SelModeDesktop) && (d == m->curdsk);
-			int is_prev = (m->selmode == SelModeDesktop) && (d == m->prevdsk);
+			int is_cur = m->viewmode == ViewDesktop && d == m->curdsk;
+			int is_prev = m->viewmode == ViewDesktop && d == m->prevdsk;
 
-			const int sch_idx = is_cur ? SchemeCurrent
-				: is_prev ? SchemePrevious : SchemeNormal;
-			drw_setscheme(drw, scheme[sch_idx]);
+			int s_idx = is_cur || is_prev ? SchemeDesktop : SchemeNormal;
+			drw_setscheme(drw, scheme[s_idx]);
 
 			snprintf(buf, sizeof(buf), "%d", i);
 			w = TEXTW(buf);
-			drw_text(drw, x, 0, w, bh, lrpad_2, buf,
-					 m->selmode == SelModeDesktop && is_cur);
+			drw_text(drw, x, 0, w, bh, lrpad_2, buf, is_cur);
 
 			if (d->occ)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw,
-						 (m == selmon && is_cur) ||
-						 (m->selmode != SelModeDesktop && m->sel && m->sel->desktop == d),
-						 is_cur);
+						 m == selmon && is_cur, is_cur);
 
 			x += w;
 			d->barx = x;
@@ -1587,12 +1644,43 @@ drawbar(Monitor *m)
 
 	}
 
+	if (m->curtags || occ) {
+		drw_setscheme(drw, scheme[SchemeTag]);
+		for (i = 0; i < LENGTH(tags); i++) {
+			tag_t t = 1ULL << i;
+			tag_t is_sel = m->viewmode == ViewTag && t & m->curtags;
+			if (!is_sel && !(t & occ))
+				continue;
+
+			w = TEXTW(tags[i]);
+			//drw_setscheme(drw, scheme[is_sel ? SchemeTag : SchemeNormal]);
+			drw_text(drw, x, 0, w, bh, lrpad_2, tags[i], is_sel);
+
+			if (m->sel && (t & m->sel->tags))
+				drw_rect(drw, x + boxs, boxs, boxw, boxw,
+						 m == selmon, is_sel);
+
+			x += w;
+		}
+	}
+
 	drw_setscheme(drw, scheme[SchemeUrgent]);
-	for (cls = classes; cls; cls = cls->next) {
-		if (!cls->urg)
-			continue;
-		drw_text(drw, x, 0, cls->w_name, bh, lrpad_2, cls->name, 1);
-		x += cls->w_name;
+	if (m->viewmode == ViewUrgent) {
+		drw_text(drw, x, 0, w_urgent_v, bh, lrpad_2, urgent_v, 1);
+		x += w_urgent_v;
+	} else {
+		for (i = 0, c = m->clients; c && i < BAR_URGENT_MAX; c = c->next) {
+			if (!c->isurgent)
+				continue;
+
+			w = TEXTW(c->name);
+			if (w > BAR_URGENT_WIDTH)
+				w = BAR_URGENT_WIDTH;
+			drw_text(drw, x, 0, w, bh, lrpad_2, c->name, 1);
+
+			x += w;
+			i++;
+		}
 	}
 	m->x_urgent_list = x;
 
@@ -1618,6 +1706,11 @@ drawbar(Monitor *m)
 	}
 
 	const int rest_area_w = m->mw - x;
+	const int s_idx = m->viewmode == ViewClass ? SchemeClass
+		: m->viewmode == ViewDesktop ? SchemeDesktop
+		: m->viewmode == ViewTag ? SchemeTag
+		: m->viewmode == ViewUrgent ? SchemeUrgent
+		: SchemeNormal;
 
 	switch (m->barmode) {
 	case BarModeStatus:
@@ -1631,7 +1724,7 @@ drawbar(Monitor *m)
 			break;
 
 		w = rest_area_w;
-		drw_setscheme(drw, scheme[SchemeCurrent]);
+		drw_setscheme(drw, scheme[s_idx]);
 
 		i = c_idx;
 		if (i < LENGTH(clabels)) {
@@ -1654,22 +1747,28 @@ drawbar(Monitor *m)
 
 		c = m->clients;
 		i = 0;
-		int end = c_cnt;
 		m->x_client_ellipsis_l = m->x_client_ellipsis_r = 0;
+		int start = 0, end = MIN(c_cnt, BAR_CLIENT_MAX);
 
-		if (c_cnt <= BAR_CLIENT_MAX) {
-			w = rest_area_w / c_cnt;
-		} else {
-			int start = c_idx - BAR_CLIENT_MAX / 2;
-			end = c_idx + (BAR_CLIENT_MAX - BAR_CLIENT_MAX / 2);
+		w = rest_area_w / end;
+		if (w < BAR_CLIENT_WIDTH) {
+			end = rest_area_w / BAR_CLIENT_WIDTH;
+			w = rest_area_w / end;
+		}
+
+		int end_x = m->mw;
+		if (end < c_cnt) {
+			start = c_idx - end / 2;
+			end = c_idx + (end - end / 2);
 			if (start < 0) {
 				end += abs(start);
 				start = 0;
 			} else if (end > c_cnt) {
 				start -= end - c_cnt;
+				end = c_cnt;
 			}
 
-			w = rest_area_w;
+			int w2 = rest_area_w;
 			drw_setscheme(drw, scheme[SchemeNormal]);
 			if (start) {
 				for (; c && i < start; c = c->next)
@@ -1678,17 +1777,19 @@ drawbar(Monitor *m)
 
 				drw_text(drw, x, 0, w_ellipsis_l, bh, lrpad_2, ellipsis_l, 0);
 				x += w_ellipsis_l;
-				w -= w_ellipsis_l;
+				w2 -= w_ellipsis_l;
 
 				m->x_client_ellipsis_l = x;
 			}
 			if (end < c_cnt) {
-				w -= w_ellipsis_r;
+				drw_text(drw, m->mw - w_ellipsis_r, 0, w_ellipsis_r, bh, lrpad_2, ellipsis_r, 0);
+				end_x -= w_ellipsis_r;
+				w2 -= w_ellipsis_r;
 
 				m->x_client_ellipsis_r = m->mw;
 			}
 
-			w /= BAR_CLIENT_MAX;
+			w = w2 / (end - start);
 		}
 
 		for (; c && i < end; c = c->next) {
@@ -1701,7 +1802,7 @@ drawbar(Monitor *m)
 			int w2 = w;
 			if (i < LENGTH(clabels)) {
 				int w3 = w_clabels[i];
-				drw_setscheme(drw, scheme[is_sel ? SchemeCurrent : SchemeClntLbl]);
+				drw_setscheme(drw, scheme[is_sel ? s_idx : SchemeClntLbl]);
 				drw_text(drw, x, 0, w3, bh, lrpad_2, clabels[i],
 						 is_selmon || c->isurgent);
 
@@ -1709,7 +1810,7 @@ drawbar(Monitor *m)
 				x += w3;
 			}
 
-			drw_setscheme(drw, scheme[is_sel ? SchemeCurrent : SchemeNormal]);
+			drw_setscheme(drw, scheme[is_sel ? s_idx : SchemeNormal]);
 			drw_text(drw, x, 0, w2, bh, lrpad_2, c->name, 0);
 
 			if (c->isfloating)
@@ -1721,16 +1822,22 @@ drawbar(Monitor *m)
 			i++;
 		}
 
-		if (end < c_cnt) {
-			drw_text(drw, x, 0, m->mw - x, bh, lrpad_2, ellipsis_r, 0);
-			x = m->mw;
+		if (x < end_x) {
+			drw_setscheme(drw, scheme[SchemeNormal]);
+			drw_rect(drw, x, 0, end_x - x, bh, 1, 1);
 		}
+		x = m->mw;
+
+		/* if (end < c_cnt) { */
+		/* 	drw_text(drw, x, 0, m->mw - x, bh, lrpad_2, ellipsis_r, 0); */
+		/* 	x = m->mw; */
+		/* } */
 		break;
 	}
 
-	if ((w = rest_area_w - (x - m->x_layout_param)) > 0) {
+	if (x < m->mw) {
 		drw_setscheme(drw, scheme[SchemeNormal]);
-		drw_rect(drw, x, 0, w, bh, 1, 1);
+		drw_rect(drw, x, 0, m->mw - x, bh, 1, 1);
 	}
 
 	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
@@ -1790,7 +1897,7 @@ focus(Client *c)
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
-		XSetWindowBorder(dpy, c->win, scheme[SchemeCurrent][ColBorder].pixel);
+		XSetWindowBorder(dpy, c->win, scheme[SchemeDesktop][ColBorder].pixel);
 		setfocus(c);
 	} else {
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
@@ -1973,10 +2080,8 @@ incnmaster(const Arg *arg)
 		return;
 
 	LayoutParams *p = _layout_params(selmon);
-	if (p) {
-		p->nmaster = p->nmaster + arg->i;
-		arrange(selmon);
-	}
+	p->nmaster = MAX(p->nmaster + arg->i, 0);
+	arrange(selmon);
 }
 
 #ifdef XINERAMA
@@ -2047,22 +2152,36 @@ manage(Window w, XWindowAttributes *wa)
 		class    = ch.res_class ? ch.res_class : broken;
 		instance = ch.res_name  ? ch.res_name  : broken;
 
+		c->class = _class_find_or_create(class);
+
 		if (XGetTransientForHint(dpy, w, &trans) && (t = wintoclient(trans))) {
 			c->mon = t->mon;
 			c->desktop = t->desktop;
+			c->tags = t->tags;
+			c->params = t->params;
 		} else {
+			c->mon = selmon;
 			applyrules(c, class, instance);
 
-			if (c->mon->selmode == SelModeDesktop)
+			switch (c->mon->viewmode) {
+			case ViewClass:
+				if (c->mon->curcls != c->class) {
+					c->mon->prevcls = c->mon->curcls;
+					c->mon->curcls = c->class;
+				}
+				c->params = c->class->params;
+				break;
+			case ViewDesktop:
 				c->desktop = c->mon->curdsk;
-		}
-
-		c->class = _class_find_or_create(class);
-
-		if (c->mon->selmode == SelModeClass) {
-			if (c->mon->curcls != c->class) {
-				c->mon->prevcls = c->mon->curcls;
-				c->mon->curcls = c->class;
+				c->params = c->desktop ? c->desktop->params : fallback_lt_params;
+				break;
+			case ViewTag:
+				if (!(c->tags = c->tags & TAGMASK))
+					c->tags = c->mon->curtags;
+				c->params = c->mon->sel ? c->mon->sel->params : fallback_lt_params;
+				break;
+			default:
+				c->params = fallback_lt_params;
 			}
 		}
 
@@ -2624,7 +2743,7 @@ setlayout(const Arg *arg)
 		return;
 
 	LayoutParams *p = _layout_params(selmon);
-	if (!p || i == p->sellayout)
+	if (i == p->sellayout)
 		return;
 
 	p->sellayout = i;
@@ -2686,6 +2805,7 @@ setup(void)
 
 	w_ellipsis_l = TEXTW(ellipsis_l);
 	w_ellipsis_r = TEXTW(ellipsis_r);
+	w_urgent_v = TEXTW(urgent_v);
 
 	for (int i = 0; i < LENGTH(clabels); i++) {
 		w_clabels[i] = TEXTW(clabels[i]);
@@ -2805,12 +2925,81 @@ tagmon(const Arg *arg)
 }
 
 void
-tile(Monitor *m)
+tag_select(const Arg *arg)
 {
-	LayoutParams *p = _layout_params(m);
-	if (!p)
+	if (!arg)
 		return;
 
+	tag_t t;
+	if (arg->t > 0) {
+		t = arg->t;
+	} else {
+		if (!(t = selmon->prevtags))
+			return;
+	}
+
+	if (selmon->viewmode == ViewTag && t == selmon->curtags)
+		return;
+
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = t;
+	selmon->viewmode = ViewTag;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
+tag_set(const Arg *arg)
+{
+	if (!arg || !selmon->sel)
+		return;
+
+	selmon->sel->tags = arg->t;
+
+	if (selmon->viewmode == ViewTag) {
+		focus(NULL);
+		arrange(selmon);
+	} else {
+		drawbar(selmon);
+	}
+}
+
+void
+tag_toggle_c(const Arg *arg)
+{
+	if (!arg || !selmon->sel)
+		return;
+
+	selmon->sel->tags ^= arg->t;
+
+	if (selmon->viewmode == ViewTag && !(selmon->curtags & selmon->sel->tags)) {
+		focus(NULL);
+		arrange(selmon);
+	} else {
+		drawbar(selmon);
+	}
+}
+
+void
+tag_toggle_m(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	tag_t t = selmon->curtags ^ arg->t;
+
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = t;
+	selmon->viewmode = t ? ViewTag : ViewClass;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
+tile(Monitor *m)
+{
 	int i, n, h, mw, my, ty;
 	Client *c;
 
@@ -2818,6 +3007,7 @@ tile(Monitor *m)
 	if (n == 0)
 		return;
 
+	LayoutParams *p = _layout_params(m);
 	if (n > p->nmaster)
 		mw = p->nmaster ? m->ww * p->mfact : 0;
 	else
@@ -2840,9 +3030,6 @@ void
 togglebar(const Arg *arg)
 {
 	LayoutParams *p = _layout_params(selmon);
-	if (!p)
-		return;
-
 	p->showbar = !p->showbar;
 	updatebarpos(selmon);
 	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
@@ -2948,8 +3135,7 @@ updatebarpos(Monitor *m)
 	m->wh = m->mh;
 
 	LayoutParams *p = _layout_params(m);
-
-	if (!p || p->showbar) {
+	if (p->showbar) {
 		m->wh -= bh;
 		m->by = m->topbar ? m->wy : m->wy + m->wh;
 		m->wy = m->topbar ? m->wy + bh : m->wy;
@@ -3157,58 +3343,6 @@ updatewmhints(Client *c)
 		else
 			c->neverfocus = 0;
 		XFree(wmh);
-	}
-}
-
-void
-do_adjacent(const Arg *arg)
-{
-	switch (selmon->selmode) {
-	case SelModeClass:
-		class_adjacent(arg);
-		break;
-	case SelModeDesktop:
-		desktop_adjacent(arg);
-		break;
-	}
-}
-
-void
-do_select(const Arg *arg)
-{
-	switch (selmon->selmode) {
-	case SelModeClass:
-		class_select(arg);
-		break;
-	case SelModeDesktop:
-		desktop_select(arg);
-		break;
-	}
-}
-
-void
-do_stack(const Arg *arg)
-{
-	switch (selmon->selmode) {
-	case SelModeClass:
-		class_stack(arg);
-		break;
-	case SelModeDesktop:
-		desktop_stack(arg);
-		break;
-	}
-}
-
-void
-do_swap(const Arg *arg)
-{
-	switch (selmon->selmode) {
-	case SelModeClass:
-		class_swap(arg);
-		break;
-	case SelModeDesktop:
-		desktop_swap(arg);
-		break;
 	}
 }
 
