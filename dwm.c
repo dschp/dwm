@@ -244,10 +244,10 @@ static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
 static Monitor *dirtomon(int dir);
-static void do_adjacent(const Arg *arg);
-static void do_select(const Arg *arg);
-static void do_stack(const Arg *arg);
-static void do_swap(const Arg *arg);
+static void dwim_adjacent(const Arg *arg);
+static void dwim_select(const Arg *arg);
+static void dwim_stack(const Arg *arg);
+static void dwim_swap(const Arg *arg);
 static void drawbar(Monitor *m);
 static void drawbars(void);
 static void enternotify(XEvent *e);
@@ -1438,64 +1438,6 @@ dirtomon(int dir)
 }
 
 void
-do_adjacent(const Arg *arg)
-{
-	switch (selmon->viewmode) {
-	case ViewClass:
-		class_adjacent(arg);
-		break;
-	case ViewDesktop:
-		desktop_adjacent(arg);
-		break;
-	case ViewTag:
-		tag_adjacent(arg);
-		break;
-	}
-}
-
-void
-do_select(const Arg *arg)
-{
-	switch (selmon->viewmode) {
-	case ViewClass:
-		class_select(arg);
-		break;
-	case ViewDesktop:
-		desktop_select(arg);
-		break;
-	case ViewTag:
-		tag_select_headtail(arg);
-		break;
-	}
-}
-
-void
-do_stack(const Arg *arg)
-{
-	switch (selmon->viewmode) {
-	case ViewClass:
-		class_stack(arg);
-		break;
-	case ViewDesktop:
-		desktop_stack(arg);
-		break;
-	}
-}
-
-void
-do_swap(const Arg *arg)
-{
-	switch (selmon->viewmode) {
-	case ViewClass:
-		class_swap(arg);
-		break;
-	case ViewDesktop:
-		desktop_swap(arg);
-		break;
-	}
-}
-
-void
 drawbar(Monitor *m)
 {
 	LayoutParams *p = _layout_params(m);
@@ -1915,6 +1857,64 @@ drawbars(void)
 
 	for (m = mons; m; m = m->next)
 		drawbar(m);
+}
+
+void
+dwim_adjacent(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_adjacent(arg);
+		break;
+	case ViewDesktop:
+		desktop_adjacent(arg);
+		break;
+	case ViewTag:
+		tag_adjacent(arg);
+		break;
+	}
+}
+
+void
+dwim_select(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_select(arg);
+		break;
+	case ViewDesktop:
+		desktop_select(arg);
+		break;
+	case ViewTag:
+		tag_select_headtail(arg);
+		break;
+	}
+}
+
+void
+dwim_stack(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_stack(arg);
+		break;
+	case ViewDesktop:
+		desktop_stack(arg);
+		break;
+	}
+}
+
+void
+dwim_swap(const Arg *arg)
+{
+	switch (selmon->viewmode) {
+	case ViewClass:
+		class_swap(arg);
+		break;
+	case ViewDesktop:
+		desktop_swap(arg);
+		break;
+	}
 }
 
 void
