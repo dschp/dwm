@@ -63,7 +63,7 @@ static const ClassRule crules[] = {
 	{ "st-256color",                "st",        {     1,   0.5,       1,      0} },
 	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      1} },
 	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      1} },
-	{ "install4j-jclient-Launcher", "ibkr",      {     1,   0.5,       1,      1} },
+	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,       1,      1} },
 };
 
 /* preallocated layout params                  nmaster  mfact  showbar  lt_idx */
@@ -93,13 +93,13 @@ static const char *tags[] = {
 
 /* key definitions */
 #define MODKEY Mod4Mask
+#define CLASSKEYS(KEY,IDX) \
+	{ MODKEY,                     KEY,   class_select,         {.i =  IDX} },
 #define DESKTOPKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   desktop_select,       {.i =  IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   desktop_move_client,  {.i =  IDX} }, \
 	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,   desktop_remove,       {.i =  IDX} },
-#define CLASSKEYS(KEY,IDX) \
-	{ MODKEY,                     KEY,   class_select,         {.i =  IDX} },
 #define TAGKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   tag_select,           {.t = 1ULL << IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   tag_set,              {.t = 1ULL << IDX} }, \
