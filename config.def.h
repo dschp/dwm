@@ -9,6 +9,7 @@
 #define TOPBAR            1     /* 0 means bottom bar */
 #define BAR_CLASS_MAX     5
 #define BAR_DESKTOP_MAX   9
+#define BAR_TAG_MAX       10
 #define BAR_CLIENT_MAX    6
 #define BAR_CLIENT_WIDTH  150
 #define BAR_URGENT_MAX    3
@@ -88,7 +89,7 @@ static const char *clabels[] = {
 /* tag labels */
 static const char *tags[] = {
 	"Q", "W", "E", "R", "T",
-	"A", "S", "D", "F", "F",
+	"A", "S", "D", "F", "G",
 };
 
 /* key definitions */

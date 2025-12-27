@@ -22,6 +22,7 @@
  */
 #include <errno.h>
 #include <locale.h>
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -58,7 +59,6 @@
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
-#define TAGMASK                 ((1 << LENGTH(tags)) - 1)
 #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
@@ -75,7 +75,7 @@ enum { ClkGroup, ClkLayout, ClkLayoutParam, ClkDesktop, ClkClients,
 enum { BarModeSelClient, BarModeClients, BarModeStatus };
 enum { ViewClass, ViewDesktop, ViewTag, ViewUrgent };
 
-typedef uint tag_t;
+typedef unsigned long long tag_t;
 
 typedef union {
 	int i;
@@ -97,7 +97,7 @@ struct LayoutParams {
 	int nmaster;
 	float mfact;
 	uint showbar;
-	uint sellayout;
+	uint lt_idx;
 };
 
 typedef struct Class Class;
@@ -190,6 +190,8 @@ struct Monitor {
 	int x_class_ellipsis_r;
 	int x_desktop_ellipsis_l;
 	int x_desktop_ellipsis_r;
+	int x_tag_ellipsis_l;
+	int x_tag_ellipsis_r;
 	int x_urgent_list;
 	int x_layout;
 	int x_layout_param;
@@ -294,7 +296,9 @@ static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
+static void tag_adjacent(const Arg *arg);
 static void tag_select(const Arg *arg);
+static void tag_select_headtail(const Arg *arg);
 static void tag_set(const Arg *arg);
 static void tag_toggle_c(const Arg *arg);
 static void tag_toggle_m(const Arg *arg);
@@ -363,12 +367,13 @@ static Class *classes;
 const char ellipsis_l[] = "<";
 const char ellipsis_r[] = ">";
 const char urgent_v[] = "Urg";
-static int w_ellipsis_l, w_ellipsis_r;
-static int w_urgent_v;
-static int w_clabels[LENGTH(clabels)];
-
-/* compile-time check if all tags fit into an unsigned int bit array. */
-struct NumTags { char limitexceeded[LENGTH(tags) > sizeof(tag_t) * 8 - 1 ? -1 : 1]; };
+int w_ellipsis_l, w_ellipsis_r;
+int w_urgent_v;
+int w_clabels[LENGTH(clabels)];
+char tlabels[sizeof(tag_t) * 8][5];
+int w_tlabels[sizeof(tag_t) * 8];
+const char dwm_version[] = "dwm " VERSION;
+int w_dwm_version;
 
 LayoutParams *
 _layout_params(Monitor *m)
@@ -398,7 +403,7 @@ const Layout *
 _current_layout(Monitor *m)
 {
 	LayoutParams *p = _layout_params(m);
-	return &layouts[p->sellayout];
+	return &layouts[p->lt_idx];
 }
 
 void
@@ -1442,6 +1447,9 @@ do_adjacent(const Arg *arg)
 	case ViewDesktop:
 		desktop_adjacent(arg);
 		break;
+	case ViewTag:
+		tag_adjacent(arg);
+		break;
 	}
 }
 
@@ -1456,7 +1464,7 @@ do_select(const Arg *arg)
 		desktop_select(arg);
 		break;
 	case ViewTag:
-		tag_select(arg);
+		tag_select_headtail(arg);
 		break;
 	}
 }
@@ -1547,6 +1555,7 @@ drawbar(Monitor *m)
 				start = 0;
 			} else if (end > cls_cnt) {
 				start -= end - cls_cnt;
+				end = cls_cnt;
 			}
 		}
 
@@ -1583,6 +1592,10 @@ drawbar(Monitor *m)
 		} else {
 			m->x_class_ellipsis_r = 0;
 		}
+	} else {
+		drw_setscheme(drw, scheme[SchemeNormal]);
+		drw_text(drw, x, 0, w_dwm_version, bh, lrpad_2, dwm_version, 0);
+		x += w_dwm_version;
 	}
 
 	if (dsk_cnt > 0) {
@@ -1596,6 +1609,7 @@ drawbar(Monitor *m)
 				start = 0;
 			} else if (end > dsk_cnt) {
 				start -= end - dsk_cnt;
+				end = dsk_cnt;
 			}
 		}
 
@@ -1614,19 +1628,27 @@ drawbar(Monitor *m)
 		}
 
 		for (i++; d && i <= end; d = d->next, i++) {
-			int is_cur = m->viewmode == ViewDesktop && d == m->curdsk;
-			int is_prev = m->viewmode == ViewDesktop && d == m->prevdsk;
-
-			int s_idx = is_cur || is_prev ? SchemeDesktop : SchemeNormal;
+			int s_idx = d->occ ? SchemeDesktop : SchemeNormal;
+			int invert = 0;
+			int draw_box = 0;
+			switch (m->viewmode) {
+			case ViewDesktop:
+				if (d == m->curdsk) {
+					s_idx = SchemeDesktop;
+					invert = 1;
+				}
+				break;
+			default:
+				draw_box = m->sel && m->sel->desktop == d;
+			}
 			drw_setscheme(drw, scheme[s_idx]);
 
 			snprintf(buf, sizeof(buf), "%d", i);
 			w = TEXTW(buf);
-			drw_text(drw, x, 0, w, bh, lrpad_2, buf, is_cur);
+			drw_text(drw, x, 0, w, bh, lrpad_2, buf, invert);
 
-			if (d->occ)
-				drw_rect(drw, x + boxs, boxs, boxw, boxw,
-						 m == selmon && is_cur, is_cur);
+			if (draw_box)
+				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, invert);
 
 			x += w;
 			d->barx = x;
@@ -1641,26 +1663,73 @@ drawbar(Monitor *m)
 		} else {
 			m->x_desktop_ellipsis_r = 0;
 		}
-
 	}
 
-	if (m->curtags || occ) {
-		drw_setscheme(drw, scheme[SchemeTag]);
-		for (i = 0; i < LENGTH(tags); i++) {
-			tag_t t = 1ULL << i;
-			tag_t is_sel = m->viewmode == ViewTag && t & m->curtags;
-			if (!is_sel && !(t & occ))
-				continue;
+	m->x_tag_ellipsis_l = m->x_tag_ellipsis_r = 0;
 
-			w = TEXTW(tags[i]);
-			//drw_setscheme(drw, scheme[is_sel ? SchemeTag : SchemeNormal]);
-			drw_text(drw, x, 0, w, bh, lrpad_2, tags[i], is_sel);
+	tag_t t = m->curtags | occ;
+	const int tag_cnt = t == 0 ? 0 : (int)log2(t) + 1;
+	if (m->viewmode == ViewTag || occ) {
+		int tag_idx = m->curtags == 0 ? 0 : (int)log2(m->curtags & -m->curtags);
 
-			if (m->sel && (t & m->sel->tags))
-				drw_rect(drw, x + boxs, boxs, boxw, boxw,
-						 m == selmon, is_sel);
+		int start = 0;
+		int end = tag_cnt;
+		if (tag_cnt > BAR_TAG_MAX) {
+			start = tag_idx - BAR_TAG_MAX / 2;
+			end = tag_idx + (BAR_TAG_MAX - BAR_TAG_MAX / 2);
+			if (start < 0) {
+				end += abs(start);
+				start = 0;
+			} else if (end > tag_cnt) {
+				start -= end - tag_cnt;
+				end = tag_cnt;
+			}
+		}
 
-			x += w;
+		if (start) {
+			drw_setscheme(drw, scheme[SchemeNormal]);
+			drw_text(drw, x, 0, w_ellipsis_l, bh, lrpad_2, ellipsis_l, 0);
+			x += w_ellipsis_l;
+			m->x_tag_ellipsis_l = x;
+		} else {
+			m->x_tag_ellipsis_l = 0;
+		}
+
+		tag_t t = 1ULL << start;
+		for (i = start; i < end; i++, t <<= 1) {
+			int s_idx = t & occ ? SchemeTag : SchemeNormal;
+			int invert = 0;
+			int draw_box = 0;
+			switch (m->viewmode) {
+			case ViewTag:
+				if (t & m->curtags) {
+					s_idx = SchemeTag;
+					invert = 1;
+				}
+				draw_box = t & occ;
+				break;
+			default:
+				draw_box = m->sel && t & m->sel->tags;
+			}
+			drw_setscheme(drw, scheme[s_idx]);
+
+			int w2 = w_tlabels[i];
+			drw_text(drw, x, 0, w2, bh, lrpad_2, tlabels[i], invert);
+
+			if (draw_box)
+				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, invert);
+
+			x += w2;
+		}
+
+		if (end < tag_cnt) {
+			drw_setscheme(drw, scheme[SchemeNormal]);
+			drw_text(drw, x, 0, w_ellipsis_r, bh, lrpad_2, ellipsis_r, 0);
+
+			x += w_ellipsis_r;
+			m->x_tag_ellipsis_r = x;
+		} else {
+			m->x_tag_ellipsis_r = 0;
 		}
 	}
 
@@ -1828,10 +1897,6 @@ drawbar(Monitor *m)
 		}
 		x = m->mw;
 
-		/* if (end < c_cnt) { */
-		/* 	drw_text(drw, x, 0, m->mw - x, bh, lrpad_2, ellipsis_r, 0); */
-		/* 	x = m->mw; */
-		/* } */
 		break;
 	}
 
@@ -2176,7 +2241,7 @@ manage(Window w, XWindowAttributes *wa)
 				c->params = c->desktop ? c->desktop->params : fallback_lt_params;
 				break;
 			case ViewTag:
-				if (!(c->tags = c->tags & TAGMASK))
+				if (!c->tags)
 					c->tags = c->mon->curtags;
 				c->params = c->mon->sel ? c->mon->sel->params : fallback_lt_params;
 				break;
@@ -2743,10 +2808,10 @@ setlayout(const Arg *arg)
 		return;
 
 	LayoutParams *p = _layout_params(selmon);
-	if (i == p->sellayout)
+	if (i == p->lt_idx)
 		return;
 
-	p->sellayout = i;
+	p->lt_idx = i;
 	strncpy(selmon->ltsymbol, layouts[i].symbol, sizeof selmon->ltsymbol);
 
 	if (selmon->sel)
@@ -2803,12 +2868,21 @@ setup(void)
 	lrpad_2 = lrpad / 2;
 	bh = drw->fonts->h + 2;
 
+	w_dwm_version = TEXTW(dwm_version);
 	w_ellipsis_l = TEXTW(ellipsis_l);
 	w_ellipsis_r = TEXTW(ellipsis_r);
 	w_urgent_v = TEXTW(urgent_v);
 
 	for (int i = 0; i < LENGTH(clabels); i++) {
 		w_clabels[i] = TEXTW(clabels[i]);
+	}
+	for (int i = 0; i < LENGTH(tlabels); i++) {
+		if (i < LENGTH(tags))
+			snprintf(tlabels[i], sizeof(tlabels[i]), "%s", tags[i]);
+		else
+			snprintf(tlabels[i], sizeof(tlabels[i]), "%d", i);
+
+		w_tlabels[i] = TEXTW(tlabels[i]);
 	}
 
 	updategeom();
@@ -2925,6 +2999,25 @@ tagmon(const Arg *arg)
 }
 
 void
+tag_adjacent(const Arg *arg)
+{
+	if (!arg || selmon->viewmode != ViewTag)
+		return;
+
+	selmon->prevtags = selmon->curtags;
+	if (arg->i > 0) {
+		selmon->curtags <<= 1;
+	} else {
+		selmon->curtags >>= 1;
+	}
+
+	selmon->viewmode = selmon->curtags ? ViewTag : ViewClass;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
 tag_select(const Arg *arg)
 {
 	if (!arg)
@@ -2939,6 +3032,32 @@ tag_select(const Arg *arg)
 	}
 
 	if (selmon->viewmode == ViewTag && t == selmon->curtags)
+		return;
+
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = t;
+	selmon->viewmode = ViewTag;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
+tag_select_headtail(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	tag_t t = 0;
+	if (arg->i > 0)
+		t = 1;
+	else {
+		for (Client *c = selmon->clients; c; c = c->next)
+			t |= c->tags;
+		t = 1ULL << (int)log2(t);
+	}
+
+	if (t == selmon->curtags)
 		return;
 
 	selmon->prevtags = selmon->curtags;
