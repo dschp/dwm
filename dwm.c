@@ -298,6 +298,7 @@ static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tag_adjacent(const Arg *arg);
+static void tag_append(const Arg *arg);
 static void tag_insert(const Arg *arg);
 static void tag_remove(const Arg *arg);
 static void tag_select(const Arg *arg);
@@ -3029,34 +3030,68 @@ tag_adjacent(const Arg *arg)
 }
 
 void
+tag_append(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	tag_t occ = 0;
+	for (Client *c = selmon->clients; c; c = c->next)
+		occ |= c->tags;
+
+	int msb = occ == 0 ? 0 : (int)log2(occ) + 1;
+	if (msb > sizeof(tag_t) * 8 - 1) {
+		msb = sizeof(tag_t) * 8 - 1;
+		int mask = ~(TAG_UNIT << msb);
+		for (Client *c = selmon->clients; c; c = c->next)
+			c->tags &= mask;
+	}
+
+	tag_t t = TAG_UNIT << msb;
+
+	if (arg->i) {
+		if (selmon->sel) {
+			if (arg->i > 0)
+				selmon->sel->tags = t;
+			else
+				selmon->sel->tags |= t;
+		}
+	}
+
+	if (t != selmon->curtags) {
+		selmon->prevtags = selmon->curtags;
+		selmon->curtags = t;
+	}
+	selmon->viewmode = ViewTag;
+
+	focus(NULL);
+	arrange(selmon);
+}
+
+void
 tag_insert(const Arg *arg)
 {
 	if (!arg)
 		return;
 
-	int pos = 0;
-	if (arg->i > 0) {
-		tag_t occ = 0;
-		for (Client *c = selmon->clients; c; c = c->next)
-			occ |= c->tags;
-
-		pos = occ == 0 ? 0 : (int)log2(occ) + 1;
-		if (pos > sizeof(tag_t) * 8 - 1) {
-			pos = sizeof(tag_t) * 8 - 1;
-			int mask = ~(TAG_UNIT << pos);
+	for (Client *c = selmon->clients; c; c = c->next)
+		if (c->tags & TAG_UNIT) {
 			for (Client *c = selmon->clients; c; c = c->next)
-				c->tags &= mask;
+				c->tags <<= 1;
+			break;
 		}
-	} else {
-		for (Client *c = selmon->clients; c; c = c->next)
-			if (c->tags & TAG_UNIT) {
-				for (Client *c = selmon->clients; c; c = c->next)
-					c->tags <<= 1;
-				break;
-			}
+
+	tag_t t = TAG_UNIT;
+
+	if (arg->i) {
+		if (selmon->sel) {
+			if (arg->i > 0)
+				selmon->sel->tags = t;
+			else
+				selmon->sel->tags |= t;
+		}
 	}
 
-	tag_t t = TAG_UNIT << pos;
 	if (t != selmon->curtags) {
 		selmon->prevtags = selmon->curtags;
 		selmon->curtags = t;
@@ -3077,7 +3112,7 @@ tag_remove(const Arg *arg)
 	if (!t)
 		return;
 
-	if (arg->i > 0) {
+	if (!arg->i) {
 		for (Client *c = selmon->clients; c; c = c->next)
 			if (t & c->tags)
 				return;
