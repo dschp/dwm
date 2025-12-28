@@ -1,6 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
 /* constants */
+#define EXIT_RELOAD       1
 #define RESIZEHINTS       0     /* 1 means respect size hints in tiled resizals */
 #define LOCKFULLSCREEN    1     /* 1 will force focus on the fullscreen window */
 #define REFRESH_RATE      120    /* refresh rate (per second) for client move/resize */
@@ -126,6 +127,7 @@ static const char *pavucmd[]  = { "pavucontrol", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function              argument */
+	{ MODKEY|ShiftMask,         XK_Delete,      reload,               {0} },
 	{ MODKEY|ShiftMask,         XK_Escape,      quit,                 {0} },
 	{ MODKEY|Mod1Mask,          XK_Escape,      killclient,           {0} },
 	{ MODKEY,                        XK_p,      spawn,                {.v = dmenucmd} },

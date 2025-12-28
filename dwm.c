@@ -282,6 +282,7 @@ static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static Monitor *recttomon(int x, int y, int w, int h);
+static void reload(const Arg *arg);
 static void resize(Client *c, int x, int y, int w, int h, int interact);
 static void resizeclient(Client *c, int x, int y, int w, int h);
 static void resizemouse(const Arg *arg);
@@ -389,6 +390,7 @@ struct tagclick {
 } tagclick[BAR_TAG_MAX];
 const char dwm_version[] = "dwm " VERSION;
 int w_dwm_version;
+int return_code = EXIT_SUCCESS;
 
 LayoutParams *
 _layout_params(Monitor *m)
@@ -2598,6 +2600,7 @@ quit(const Arg *arg)
 			return;
 	}
 
+	return_code = EXIT_SUCCESS;
 	running = 0;
 }
 
@@ -2613,6 +2616,13 @@ recttomon(int x, int y, int w, int h)
 			r = m;
 		}
 	return r;
+}
+
+void
+reload(const Arg *arg)
+{
+	return_code = EXIT_RELOAD;
+	running = 0;
 }
 
 void
@@ -3886,5 +3896,6 @@ main(int argc, char *argv[])
 	run();
 	cleanup();
 	XCloseDisplay(dpy);
-	return EXIT_SUCCESS;
+
+	return return_code;
 }
