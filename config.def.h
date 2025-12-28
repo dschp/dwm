@@ -75,10 +75,10 @@ static LayoutParams urgent_lt_params         = {     1,   0.5,       1,      1 }
 /* layouts */
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	{ "[]=",      tile },    /* first entry is default */
+	{ "[]=",      tile_l },    /* first entry is default */
 	{ "[M]",      monocle },
 	{ "><>",      NULL },    /* no layout function means floating behavior */
-	{ "=[]",      tile },
+	{ "=[]",      tile_r },
 };
 
 /* client labels */

@@ -312,7 +312,8 @@ static void tag_swap(const Arg *arg);
 static void tag_stack(const Arg *arg);
 static void tag_toggle_c(const Arg *arg);
 static void tag_toggle_m(const Arg *arg);
-static void tile(Monitor *m);
+static void tile_l(Monitor *m);
+static void tile_r(Monitor *m);
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
@@ -3420,9 +3421,9 @@ tag_toggle_m(const Arg *arg)
 }
 
 void
-tile(Monitor *m)
+_tile(Monitor *m, int reverse)
 {
-	int i, n, h, mw, my, ty;
+	int i, n, h, mw, mx, sx, my, sy;
 	Client *c;
 
 	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -3430,22 +3431,39 @@ tile(Monitor *m)
 		return;
 
 	LayoutParams *p = _layout_params(m);
-	if (n > p->nmaster)
+	if (n > p->nmaster) {
 		mw = p->nmaster ? m->ww * p->mfact : 0;
-	else
+		mx = reverse ? m->ww - mw : 0;
+		sx = reverse ? 0 : mw;
+	} else {
 		mw = m->ww;
-	for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+		mx = sx = 0;
+	}
+
+	for (i = my = sy = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
 		if (i < p->nmaster) {
 			h = (m->wh - my) / (MIN(n, p->nmaster) - i);
-			resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
+			resize(c, m->wx + mx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
 			if (my + HEIGHT(c) < m->wh)
 				my += HEIGHT(c);
 		} else {
-			h = (m->wh - ty) / (n - i);
-			resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-			if (ty + HEIGHT(c) < m->wh)
-				ty += HEIGHT(c);
+			h = (m->wh - sy) / (n - i);
+			resize(c, m->wx + sx, m->wy + sy, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
+			if (sy + HEIGHT(c) < m->wh)
+				sy += HEIGHT(c);
 		}
+}
+
+void
+tile_l(Monitor *m)
+{
+	_tile(m, 0);
+}
+
+void
+tile_r(Monitor *m)
+{
+	_tile(m, 1);
 }
 
 void
