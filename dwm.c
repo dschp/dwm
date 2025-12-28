@@ -71,10 +71,12 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 	   NetWMFullscreen, NetActiveWindow, NetWMWindowType,
 	   NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
-enum { ClkGroup, ClkLayout, ClkLayoutParam, ClkDesktop, ClkClients,
+enum { ClkClass, ClkDesktop, ClkTag, ClkUrgent, ClkLayout, ClkLayoutParam,
+	   ClkClientList, ClkSelClient, ClkStatusText,
 	   ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
-enum { BarModeSelClient, BarModeClients, BarModeStatus };
+enum { BarModeClients, BarModeSelClient, BarModeStatus };
 enum { ViewClass, ViewDesktop, ViewTag, ViewUrgent };
+enum { BanishTopLeft, BanishTopRight, BanishBottomLeft, BanishBottomRight };
 
 typedef unsigned long long tag_t;
 
@@ -193,6 +195,8 @@ struct Monitor {
 	int x_desktop_ellipsis_r;
 	int x_tag_ellipsis_l;
 	int x_tag_ellipsis_r;
+	tag_t tag_ellipsis_l;
+	tag_t tag_ellipsis_r;
 	int x_urgent_list;
 	int x_layout;
 	int x_layout_param;
@@ -378,6 +382,10 @@ int w_urgent_v;
 int w_clabels[LENGTH(clabels)];
 char tlabels[sizeof(tag_t) * 8][5];
 int w_tlabels[sizeof(tag_t) * 8];
+struct tagclick {
+	int barx;
+	tag_t tag;
+} tagclick[BAR_TAG_MAX];
 const char dwm_version[] = "dwm " VERSION;
 int w_dwm_version;
 
@@ -743,15 +751,28 @@ banish_pointer(const Arg *arg)
 	if (!arg)
 		return;
 
-	XWarpPointer(dpy, None, root, 0, 0, 0, 0,
-				 arg->i > 0 ? selmon->mw : 0, TOPBAR ? 0 : selmon->mh);
+	int x = 0, y = 0;
+	switch (arg->i) {
+	case BanishTopRight:
+		x = selmon->mw;
+		break;
+	case BanishBottomLeft:
+		y = selmon->mh;
+		break;
+	case BanishBottomRight:
+		x = selmon->mw;
+		y = selmon->mh;
+		break;
+	}
+
+	XWarpPointer(dpy, None, root, 0, 0, 0, 0, x, y);
 	XFlush(dpy);
 }
 
 void
 buttonpress(XEvent *e)
 {
-	uint i, click;
+	uint i, click = ClkRootWin;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -759,7 +780,6 @@ buttonpress(XEvent *e)
 	Desktop *d;
 	XButtonPressedEvent *ev = &e->xbutton;
 
-	click = ClkRootWin;
 	/* focus monitor if necessary */
 	if ((m = wintomon(ev->window)) && m != selmon) {
 		unfocus(selmon->sel, 1);
@@ -772,11 +792,15 @@ buttonpress(XEvent *e)
 				_class_select(classes);
 			return;
 		}
-		for (cls = classes; cls; cls = cls->next) {
+		for (cls = classes, i = 1; cls; cls = cls->next, i++) {
 			if (ev->x < cls->barx) {
-				if (ev->button == Button1)
+				if (ev->button == Button1) {
 					_class_select(cls);
-				return;
+					return;
+				}
+
+				click = ClkClass;
+				goto process;
 			}
 		}
 		if (ev->x < selmon->x_class_ellipsis_r) {
@@ -790,11 +814,15 @@ buttonpress(XEvent *e)
 				_desktop_select(m->desktops);
 			return;
 		}
-		for (d = m->desktops; d; d = d->next) {
+		for (d = m->desktops, i = 1; d; d = d->next, i++) {
 			if (ev->x < d->barx) {
-				if (ev->button == Button1)
+				if (ev->button == Button1) {
 					_desktop_select(d);
-				return;
+					return;
+				}
+
+				click = ClkDesktop;
+				goto process;
 			}
 		}
 		if (ev->x < selmon->x_desktop_ellipsis_r) {
@@ -803,48 +831,66 @@ buttonpress(XEvent *e)
 			return;
 		}
 
-		if (ev->x < selmon->x_urgent_list) {
-			if (ev->button == Button1)
-				client_select_urg(&arg);
+		if (ev->x < selmon->x_tag_ellipsis_l) {
+			if (ev->button == Button1) {
+				arg.t = selmon->tag_ellipsis_l;
+				tag_select(&arg);
+			}
 			return;
+		}
+		for (i = 0; i < BAR_TAG_MAX; i++) {
+			if (!tagclick[i].barx)
+				break;
+			if (ev->x < tagclick[i].barx) {
+				click = ClkTag;
+				arg.t = tagclick[i].tag;
+				goto process;
+			}
+		}
+		if (ev->x < selmon->x_tag_ellipsis_r) {
+			if (ev->button == Button1) {
+				arg.t = selmon->tag_ellipsis_r;
+				tag_select(&arg);
+			}
+			return;
+		}
+
+		if (ev->x < selmon->x_urgent_list) {
+			click = ClkUrgent;
 		} else if (ev->x < selmon->x_layout) {
 			click = ClkLayout;
 		} else if (ev->x < selmon->x_layout_param) {
 			click = ClkLayoutParam;
-		} else if (selmon->barmode == BarModeSelClient) {
-			return;
 		} else if (selmon->barmode == BarModeClients) {
-			switch (ev->button) {
-			case Button4:
-			case Button5:
-				click = ClkClients;
-				break;
-			default:
-				if (ev->x < m->x_client_ellipsis_l) {
-					arg.i = 1;
-					client_select(&arg);
-					return;
-				}
-				for (c = selmon->clients; c; c = c->next)
-					if (ev->x < c->barx) {
-						switch (ev->button) {
-						case Button1:
-							focus(c);
-							restack(selmon);
-							return;
-						case Button3:
-							focus(c);
-							zoom(NULL);
-							return;
-						}
+			click = ClkClientList;
+
+			if (ev->x < m->x_client_ellipsis_l) {
+				arg.i = 1;
+				goto process;
+			}
+			for (c = selmon->clients; c; c = c->next)
+				if (ev->x < c->barx) {
+					switch (ev->button) {
+					case Button1:
+						focus(c);
+						restack(selmon);
+						return;
+					case Button3:
+						focus(c);
+						zoom(NULL);
 						return;
 					}
-				if (ev->x <= m->x_client_ellipsis_r) {
-					arg.i = -1;
-					client_select(&arg);
+
+					goto process;
 				}
-				return;
+			if (ev->x <= m->x_client_ellipsis_r) {
+				arg.i = -1;
+				goto process;
 			}
+		} else if (selmon->barmode == BarModeSelClient) {
+			click = ClkSelClient;
+		} else if (selmon->barmode == BarModeStatus) {
+			click = ClkStatusText;
 		}
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
@@ -853,6 +899,7 @@ buttonpress(XEvent *e)
 		click = ClkClientWin;
 	}
 
+ process:
 	for (i = 0; i < LENGTH(buttons); i++)
 		if (click == buttons[i].click && buttons[i].func && buttons[i].button == ev->button
 			&& CLEANMASK(buttons[i].mask) == CLEANMASK(ev->state))
@@ -1228,7 +1275,7 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	m->topbar = TOPBAR;
-	m->barmode = BarModeSelClient;
+	m->barmode = BarModeClients;
 	m->viewmode = ViewClass;
 
 	return m;
@@ -1614,6 +1661,7 @@ drawbar(Monitor *m)
 	}
 
 	m->x_tag_ellipsis_l = m->x_tag_ellipsis_r = 0;
+	m->tag_ellipsis_l = m->tag_ellipsis_r = 0;
 
 	tag_t t = m->curtags | occ;
 	const int tag_cnt = t == 0 ? 0 : (int)log2(t) + 1;
@@ -1638,13 +1686,15 @@ drawbar(Monitor *m)
 			drw_setscheme(drw, scheme[SchemeNormal]);
 			drw_text(drw, x, 0, w_ellipsis_l, bh, lrpad_2, ellipsis_l, 0);
 			x += w_ellipsis_l;
+
 			m->x_tag_ellipsis_l = x;
-		} else {
-			m->x_tag_ellipsis_l = 0;
+			int lsb = occ == 0 ? 0 : (int)log2(occ & ~occ);
+			m->tag_ellipsis_l = TAG_UNIT << lsb;
 		}
 
 		tag_t t = TAG_UNIT << start;
-		for (i = start; i < end; i++, t <<= 1) {
+		int bar_i = 0;
+		for (i = start; i < end; i++, t <<= 1, bar_i++) {
 			int s_idx = t & occ ? SchemeTag : SchemeNormal;
 			int invert = 0;
 			int draw_box = 0;
@@ -1668,6 +1718,12 @@ drawbar(Monitor *m)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, invert);
 
 			x += w2;
+			tagclick[bar_i].barx = x;
+			tagclick[bar_i].tag = t;
+		}
+		if (bar_i < BAR_TAG_MAX) {
+			tagclick[bar_i].barx = 0;
+			tagclick[bar_i].tag = 0;
 		}
 
 		if (end < tag_cnt) {
@@ -1675,9 +1731,10 @@ drawbar(Monitor *m)
 			drw_text(drw, x, 0, w_ellipsis_r, bh, lrpad_2, ellipsis_r, 0);
 
 			x += w_ellipsis_r;
+
 			m->x_tag_ellipsis_r = x;
-		} else {
-			m->x_tag_ellipsis_r = 0;
+			int msb = occ == 0 ? 0 : (int)log2(occ);
+			m->tag_ellipsis_r = TAG_UNIT << msb;
 		}
 	}
 
