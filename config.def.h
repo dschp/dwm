@@ -103,7 +103,7 @@ static const char *tags[] = {
 	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} }, \
 	{ MODKEY|ShiftMask|Mod1Mask,  KEY,   desktop_merge,        {.i =  IDX} },
 #define TAGKEYS(KEY,IDX) \
-	{ MODKEY,                     KEY,   tag_select,           {.t = TAG_UNIT << IDX} }, \
+	{ MODKEY,                     KEY,   tag_view,             {.t = TAG_UNIT << IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   tag_set,              {.t = TAG_UNIT << IDX} }, \
 	{ MODKEY|Mod1Mask,            KEY,   tag_toggle_c,         {.t = TAG_UNIT << IDX} }, \
 	{ MODKEY|ControlMask,         KEY,   tag_toggle_m,         {.t = TAG_UNIT << IDX} },
