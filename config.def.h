@@ -137,7 +137,7 @@ static const Key keys[] = {
 	{ MODKEY,                      XK_Tab,      dwim_select,          {.i =  0} },
 	{ MODKEY,                    XK_comma,      client_select,        {.i = -1} },
 	{ MODKEY,                   XK_period,      client_select_urg,    {0} },
-	{ MODKEY,                    XK_slash,      setviewmode,          {.i = ViewClass} },
+	{ MODKEY,                    XK_slash,      cycleviewmode,        {0} },
 	{ MODKEY,                    XK_grave,      banish_pointer,       {.i = BanishTopLeft    } },
 	{ MODKEY|ControlMask,        XK_grave,      banish_pointer,       {.i = BanishTopRight   } },
 	{ MODKEY|ShiftMask,          XK_grave,      banish_pointer,       {.i = BanishBottomLeft } },

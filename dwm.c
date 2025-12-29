@@ -238,6 +238,7 @@ static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static Monitor *createmon(void);
+static void cycleviewmode(const Arg *arg);
 static void desktop_add(const Arg *arg);
 static void desktop_adjacent(const Arg *arg);
 static void desktop_merge(const Arg *arg);
@@ -302,7 +303,6 @@ static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
-static void setviewmode(const Arg *arg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
@@ -829,17 +829,6 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 			*h = MIN(*h, c->maxh);
 	}
 	return *x != c->x || *y != c->y || *w != c->w || *h != c->h;
-}
-
-void
-setviewmode(const Arg *arg)
-{
-	if (selmon->viewmode == ViewClass)
-		return;
-
-	selmon->viewmode = ViewClass;
-	focus(NULL);
-	arrange(selmon);
 }
 
 void
@@ -1435,6 +1424,46 @@ createmon(void)
 	m->viewmode = ViewClass;
 
 	return m;
+}
+
+void
+cycleviewmode(const Arg *arg)
+{
+	int i = selmon->viewmode + 1;
+	for (; i <= ViewUrgent; i++) {
+		switch (i) {
+		case ViewDesktop:
+			if (selmon->desktops && selmon->curdsk)
+				goto found;
+			break;
+		case ViewTag:
+			if (selmon->curtags)
+				goto found;
+			break;
+		case ViewUrgent:
+			client_select_urg(NULL);
+			if (selmon->viewmode == ViewUrgent)
+				goto found;
+			break;
+		}
+	}
+
+	if (i > ViewUrgent) {
+		selmon->viewmode = ViewClass;
+		if (selmon->sel && selmon->curcls != selmon->sel->class) {
+			selmon->prevcls = selmon->curcls;
+			selmon->curcls = selmon->sel->class;
+			focus(selmon->sel);
+		} else {
+			focus(NULL);
+		}
+	} else {
+	found:
+		selmon->viewmode = i;
+		focus(NULL);
+	}
+
+	arrange(selmon);
 }
 
 void
