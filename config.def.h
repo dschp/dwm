@@ -100,8 +100,7 @@ static const char *tags[] = {
 #define DESKTOPKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   desktop_select,       {.i =  IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   desktop_move_client,  {.i =  IDX} }, \
-	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} }, \
-	{ MODKEY|ShiftMask|Mod1Mask,  KEY,   desktop_merge,        {.i =  IDX} },
+	{ MODKEY|Mod1Mask,            KEY,   desktop_move_client,  {.i = -IDX} },
 #define TAGKEYS(KEY,IDX) \
 	{ MODKEY,                     KEY,   tag_view,             {.t = TAG_UNIT << IDX} }, \
 	{ MODKEY|ShiftMask,           KEY,   tag_set,              {.t = TAG_UNIT << IDX} }, \
@@ -129,16 +128,16 @@ static const Key keys[] = {
 	/* modifier                     key        function              argument */
 	{ MODKEY|ShiftMask,         XK_Delete,      reload,               {0} },
 	{ MODKEY|ShiftMask,         XK_Escape,      quit,                 {0} },
-	{ MODKEY|Mod1Mask,          XK_Escape,      killclient,           {0} },
 	{ MODKEY,                        XK_p,      spawn,                {.v = dmenucmd} },
 	{ MODKEY|ShiftMask,              XK_p,      spawn,                {.v = pavucmd} },
 	{ MODKEY|ShiftMask,         XK_Return,      spawn,                {.v = termcmd} },
 	{ MODKEY,                   XK_Return,      zoom,                 {0} },
 	{ MODKEY,                    XK_space,      togglefloating,       {0} },
-	{ MODKEY,                    XK_comma,      togglebar,            {0} },
+	{ MODKEY|ShiftMask,          XK_space,      togglebar,            {0} },
 	{ MODKEY,                      XK_Tab,      dwim_select,          {.i =  0} },
-	{ MODKEY,                    XK_slash,      client_select,        {.i = -1} },
+	{ MODKEY,                    XK_comma,      client_select,        {.i = -1} },
 	{ MODKEY,                   XK_period,      client_select_urg,    {0} },
+	{ MODKEY,                    XK_slash,      setviewmode,          {.i = ViewClass} },
 	{ MODKEY,                    XK_grave,      banish_pointer,       {.i = BanishTopLeft    } },
 	{ MODKEY|ControlMask,        XK_grave,      banish_pointer,       {.i = BanishTopRight   } },
 	{ MODKEY|ShiftMask,          XK_grave,      banish_pointer,       {.i = BanishBottomLeft } },
@@ -147,31 +146,26 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_Up,      setlayout,            {.i =  1} },
 	{ MODKEY,                     XK_Down,      setlayout,            {.i =  2} },
 	{ MODKEY,                    XK_Right,      setlayout,            {.i =  3} },
-	{ MODKEY|ShiftMask,           XK_Left,      setbarmode,           {.i = BarModeClients} },
-	{ MODKEY|ShiftMask,             XK_Up,      setbarmode,           {.i = BarModeSelClient} },
-	{ MODKEY|ShiftMask,           XK_Down,      setbarmode,           {.i = BarModeStatus   } },
-	{ MODKEY|ShiftMask,          XK_Right,      setbarmode,           {.i = BarModeClients  } },
+	{ MODKEY|ShiftMask,           XK_Left,      setbarmode,           {.i = BarClients  } },
+	{ MODKEY|ShiftMask,             XK_Up,      setbarmode,           {.i = BarSelClient} },
+	{ MODKEY|ShiftMask,           XK_Down,      setbarmode,           {.i = BarStatus   } },
+	{ MODKEY|ShiftMask,          XK_Right,      setbarmode,           {.i = BarClients  } },
 	{ MODKEY,                    XK_equal,      desktop_add,          {0} },
-	{ MODKEY|ShiftMask,          XK_equal,      desktop_move_client,  {.i =  0} },
-	{ MODKEY,                    XK_minus,      desktop_remove,       {.i =  1} },
-	{ MODKEY|ShiftMask,          XK_minus,      desktop_remove,       {.i = -1} },
-	{ MODKEY|Mod1Mask,           XK_minus,      desktop_merge,        {.i = -1} },
-	{ MODKEY,              XK_bracketleft,      tag_insert,           {.i =  0} },
-	{ MODKEY,             XK_bracketright,      tag_append,           {.i =  0} },
-	{ MODKEY|ShiftMask,    XK_bracketleft,      tag_insert,           {.i =  1} },
-	{ MODKEY|ShiftMask,   XK_bracketright,      tag_append,           {.i =  1} },
-	{ MODKEY|Mod1Mask,     XK_bracketleft,      tag_insert,           {.i = -1} },
-	{ MODKEY|Mod1Mask,    XK_bracketright,      tag_append,           {.i = -1} },
-	{ MODKEY|ControlMask,  XK_bracketleft,      tag_remove,           {.i =  0} },
-	{ MODKEY|ControlMask, XK_bracketright,      tag_remove,           {.i =  1} },
+	{ MODKEY,                    XK_minus,      dwim_remove,          {.i =  0} },
+	{ MODKEY|ShiftMask,          XK_minus,      dwim_remove,          {.i =  1} },
+	{ MODKEY|Mod1Mask,           XK_minus,      client_remove_tags,   {0} },
 	{ MODKEY,                        XK_y,      dwim_select,          {.i =  1} },
-	{ MODKEY|ShiftMask,              XK_y,      dwim_stack,           {.i =  1} },
-	{ MODKEY,                        XK_u,      dwim_adjacent,        {.i = -1} },
-	{ MODKEY|ShiftMask,              XK_u,      dwim_swap,            {.i = -1} },
-	{ MODKEY,                        XK_i,      dwim_adjacent,        {.i =  1} },
-	{ MODKEY|ShiftMask,              XK_i,      dwim_swap,            {.i =  1} },
 	{ MODKEY,                        XK_o,      dwim_select,          {.i = -1} },
+	{ MODKEY|ShiftMask,              XK_y,      dwim_stack,           {.i =  1} },
 	{ MODKEY|ShiftMask,              XK_o,      dwim_stack,           {.i = -1} },
+	{ MODKEY,                        XK_u,      dwim_adjacent,        {.i = -1} },
+	{ MODKEY,                        XK_i,      dwim_adjacent,        {.i =  1} },
+	{ MODKEY|ShiftMask,              XK_u,      dwim_swap,            {.i = -1} },
+	{ MODKEY|ShiftMask,              XK_i,      dwim_swap,            {.i =  1} },
+	{ MODKEY|ControlMask,            XK_y,      dwim_insert,          {.i = -1} },
+	{ MODKEY|ControlMask,            XK_u,      dwim_insert,          {.i =  1} },
+	{ MODKEY|ControlMask,            XK_i,      dwim_append,          {.i =  1} },
+	{ MODKEY|ControlMask,            XK_o,      dwim_append,          {.i = -1} },
 	{ MODKEY,                        XK_j,      focusstack,           {.i =  1} },
 	{ MODKEY,                        XK_k,      focusstack,           {.i = -1} },
 	{ MODKEY|ShiftMask,              XK_j,      movestack,            {.i =  1} },
@@ -188,28 +182,28 @@ static const Key keys[] = {
 	{ MODKEY,                      XK_End,      focusmon,             {.i =  1} },
 	{ MODKEY|ShiftMask,           XK_Home,      tagmon,               {.i =  1} },
 	{ MODKEY|ShiftMask,            XK_End,      tagmon,               {.i = -1} },
-	DESKTOPKEYS(                    XK_F1,                            1)
-	DESKTOPKEYS(                    XK_F2,                            2)
-	DESKTOPKEYS(                    XK_F3,                            3)
-	DESKTOPKEYS(                    XK_F4,                            4)
-	DESKTOPKEYS(                    XK_F5,                            5)
-	DESKTOPKEYS(                    XK_F6,                            6)
-	DESKTOPKEYS(                    XK_F7,                            7)
-	DESKTOPKEYS(                    XK_F8,                            8)
-	DESKTOPKEYS(                    XK_F9,                            9)
-	DESKTOPKEYS(                   XK_F10,                           10)
-	DESKTOPKEYS(                   XK_F11,                           11)
-	DESKTOPKEYS(                   XK_F12,                           12)
-	CLASSKEYS(                       XK_1,                            1)
-	CLASSKEYS(                       XK_2,                            2)
-	CLASSKEYS(                       XK_3,                            3)
-	CLASSKEYS(                       XK_4,                            4)
-	CLASSKEYS(                       XK_5,                            5)
-	CLASSKEYS(                       XK_6,                            6)
-	CLASSKEYS(                       XK_7,                            7)
-	CLASSKEYS(                       XK_8,                            8)
-	CLASSKEYS(                       XK_9,                            9)
-	CLASSKEYS(                       XK_0,                           10)
+	CLASSKEYS(                      XK_F1,                            1)
+	CLASSKEYS(                      XK_F2,                            2)
+	CLASSKEYS(                      XK_F3,                            3)
+	CLASSKEYS(                      XK_F4,                            4)
+	CLASSKEYS(                      XK_F5,                            5)
+	CLASSKEYS(                      XK_F6,                            6)
+	CLASSKEYS(                      XK_F7,                            7)
+	CLASSKEYS(                      XK_F8,                            8)
+	CLASSKEYS(                      XK_F9,                            9)
+	CLASSKEYS(                     XK_F10,                           10)
+	CLASSKEYS(                     XK_F11,                           11)
+	CLASSKEYS(                     XK_F12,                           12)
+	DESKTOPKEYS(                     XK_1,                            1)
+	DESKTOPKEYS(                     XK_2,                            2)
+	DESKTOPKEYS(                     XK_3,                            3)
+	DESKTOPKEYS(                     XK_4,                            4)
+	DESKTOPKEYS(                     XK_5,                            5)
+	DESKTOPKEYS(                     XK_6,                            6)
+	DESKTOPKEYS(                     XK_7,                            7)
+	DESKTOPKEYS(                     XK_8,                            8)
+	DESKTOPKEYS(                     XK_9,                            9)
+	DESKTOPKEYS(                     XK_0,                           10)
 	TAGKEYS(                         XK_q,                            0)
 	TAGKEYS(                         XK_w,                            1)
 	TAGKEYS(                         XK_e,                            2)
