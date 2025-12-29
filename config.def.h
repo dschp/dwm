@@ -233,7 +233,7 @@ static const Button buttons[] = {
 	{ ClkDesktop,        0,           Button3,    desktop_move_client,  {0} },
 	{ ClkDesktop,        0,           Button4,    desktop_adjacent,     {.i = -1} },
 	{ ClkDesktop,        0,           Button5,    desktop_adjacent,     {.i =  1} },
-	{ ClkTag,            0,           Button1,    tag_select,           {0} },
+	{ ClkTag,            0,           Button1,    tag_view,             {0} },
 	{ ClkTag,            0,           Button2,    tag_toggle_c,         {0} },
 	{ ClkTag,            0,           Button3,    tag_set,              {0} },
 	{ ClkTag,            0,           Button4,    tag_adjacent,         {.i = -1} },

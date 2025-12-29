@@ -3535,9 +3535,9 @@ tag_view(const Arg *arg)
 		return;
 
 	tag_t t;
-	if (arg->t > 0) {
+	if (arg->t > 0)
 		t = arg->t;
-	} else if (!(t = selmon->prevtags))
+	else if (!(t = selmon->prevtags))
 		return;
 
 	if (selmon->viewmode == ViewTag && t == selmon->curtags)
