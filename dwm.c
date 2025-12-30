@@ -1572,7 +1572,7 @@ drawbar(Monitor *m)
 		tag_t t = TAG_UNIT << start;
 		int bar_i = 0;
 		for (i = start; i < end; i++, t <<= 1, bar_i++) {
-			int is_selected = t & m->curtags;
+			int is_selected = m->viewmode == ViewTag && t & m->curtags;
 			int s_idx = t & occ || is_selected ? SchemeTag : SchemeNormal;
 			int invert = is_selected;
 			int draw_box = m->sel && t & m->sel->tags;
