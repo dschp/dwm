@@ -1508,7 +1508,7 @@ drawbar(Monitor *m)
 		drw_setscheme(drw, scheme[SchemeClass]);
 		int bar_i = 0;
 		for (i = 0; cls && i < BAR_CLASS_MAX; cls = cls->next, i++, bar_i++) {
-			int invert = cls == m->curcls;
+			int invert = m->viewmode == ViewClass && cls == m->curcls;
 			drw_text(drw, x, 0, cls->w_name, bh, lrpad_2, cls->name, invert);
 			if (m->sel && m->sel->class == cls)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, invert);
@@ -1572,17 +1572,10 @@ drawbar(Monitor *m)
 		tag_t t = TAG_UNIT << start;
 		int bar_i = 0;
 		for (i = start; i < end; i++, t <<= 1, bar_i++) {
-			int s_idx = t & occ ? SchemeTag : SchemeNormal;
-			int invert = 0;
+			int is_selected = t & m->curtags;
+			int s_idx = t & occ || is_selected ? SchemeTag : SchemeNormal;
+			int invert = is_selected;
 			int draw_box = m->sel && t & m->sel->tags;
-			switch (m->viewmode) {
-			case ViewTag:
-				if (t & m->curtags) {
-					s_idx = SchemeTag;
-					invert = 1;
-				}
-				break;
-			}
 			drw_setscheme(drw, scheme[s_idx]);
 
 			int w2 = w_tlabels[i];
