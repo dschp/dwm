@@ -61,23 +61,23 @@ static const Rule rules[] = {
 
 static const ClassRule crules[] = {
 	/* class                        rename       nmaster  mfact  showbar  lt_idx */
-	{ "st-256color",                "st",        {     1,   0.5,       1,      0} },
-	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      1} },
-	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      1} },
-	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,       1,      1} },
+	{ "st-256color",                "st",        {     1,   0.5,       1,      1} },
+	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      0} },
+	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      0} },
+	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,       1,      0} },
 };
 
 /* preallocated layout params           nmaster  mfact  showbar  lt_idx */
-static LayoutParams default_lt_params = {     1,   0.5,       1,      0 };
-static LayoutParams class_lt_params   = {     1,   0.5,       1,      1 };
+static LayoutParams default_lt_params = {     1,   0.5,       1,      1 };
+static LayoutParams class_lt_params   = {     1,   0.5,       1,      0 };
 
 /* layouts */
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	{ "[]=",      tile_l },    /* first entry is default */
 	{ "[M]",      monocle },
-	{ "><>",      NULL },    /* no layout function means floating behavior */
+	{ "[]=",      tile_l },
 	{ "=[]",      tile_r },
+	{ "><>",      NULL },
 };
 
 /* client labels */
@@ -122,6 +122,7 @@ static const Key keys[] = {
 	/* modifier                     key        function              argument */
 	{ MODKEY|ShiftMask,         XK_Delete,      reload,               {0} },
 	{ MODKEY|ShiftMask,         XK_Escape,      quit,                 {0} },
+	{ MODKEY|ShiftMask,      XK_BackSpace,      killclient,           {0} },
 	{ MODKEY,                        XK_p,      spawn,                {.v = dmenucmd} },
 	{ MODKEY|ShiftMask,              XK_p,      spawn,                {.v = pavucmd} },
 	{ MODKEY|ShiftMask,         XK_Return,      spawn,                {.v = termcmd} },
@@ -135,13 +136,13 @@ static const Key keys[] = {
 	{ MODKEY|ControlMask,        XK_grave,      banish_pointer,       {.i = BanishTopRight   } },
 	{ MODKEY|ShiftMask,          XK_grave,      banish_pointer,       {.i = BanishBottomLeft } },
 	{ MODKEY|Mod1Mask ,          XK_grave,      banish_pointer,       {.i = BanishBottomRight} },
-	{ MODKEY,                     XK_Left,      setlayout,            {.i =  0} },
-	{ MODKEY,                       XK_Up,      setlayout,            {.i =  1} },
-	{ MODKEY,                     XK_Down,      setlayout,            {.i =  2} },
-	{ MODKEY,                    XK_Right,      setlayout,            {.i =  3} },
-	{ MODKEY,                    XK_minus,      group_remove,         {.i =  0} },
-	{ MODKEY|ShiftMask,          XK_minus,      group_remove,         {.i =  1} },
-	{ MODKEY|Mod1Mask,           XK_minus,      client_remove_tags,   {0} },
+	{ MODKEY,               XK_apostrophe,      setlayout,            {.i =  0} },
+	{ MODKEY,              XK_bracketleft,      setlayout,            {.i =  1} },
+	{ MODKEY,             XK_bracketright,      setlayout,            {.i =  2} },
+	{ MODKEY,                XK_backslash,      setlayout,            {.i =  3} },
+	{ MODKEY,                    XK_minus,      tag_remove,           {.i =  0} },
+	{ MODKEY|ShiftMask,          XK_minus,      tag_remove,           {.i =  1} },
+	{ MODKEY|ControlMask,        XK_minus,      tag_remove,           {.i = -1} },
 	{ MODKEY,                        XK_y,      group_select,         {.i =  1} },
 	{ MODKEY,                        XK_o,      group_select,         {.i = -1} },
 	{ MODKEY|ShiftMask,              XK_y,      group_stack,          {.i =  1} },

@@ -237,7 +237,6 @@ static void grabkeys(void);
 static void group_adjacent(const Arg *arg);
 static void group_append(const Arg *arg);
 static void group_insert(const Arg *arg);
-static void group_remove(const Arg *arg);
 static void group_select(const Arg *arg);
 static void group_stack(const Arg *arg);
 static void group_swap(const Arg *arg);
@@ -275,6 +274,7 @@ static void showhide(Client *c);
 static void spawn(const Arg *arg);
 static void tagmon(const Arg *arg);
 static void tag_adjacent(const Arg *arg);
+static void tag_remove(const Arg *arg);
 static void tag_select(const Arg *arg);
 static void tag_set(const Arg *arg);
 static void tag_swap(const Arg *arg);
@@ -543,7 +543,7 @@ void
 _tag_remove(Monitor *m, int force)
 {
 	tag_t t = m->curtags;
-	if (!t)
+	if (!t || m->viewmode != ViewTag)
 		return;
 
 	if (!force) {
@@ -1814,23 +1814,6 @@ group_insert(const Arg *arg)
 }
 
 void
-group_remove(const Arg *arg)
-{
-	if (!arg)
-		return;
-
-	switch (selmon->viewmode) {
-	case ViewClass:
-		if (arg->i > 0)
-			killclient(NULL);
-		break;
-	case ViewTag:
-		_tag_remove(selmon, arg->i > 0);
-		break;
-	}
-}
-
-void
 group_select(const Arg *arg)
 {
 	switch (selmon->viewmode) {
@@ -2910,6 +2893,18 @@ tag_adjacent(const Arg *arg)
 
 	focus(NULL);
 	arrange(selmon);
+}
+
+void
+tag_remove(const Arg *arg)
+{
+	if (!arg)
+		return;
+
+	if (arg->i < 0)
+		client_remove_tags(arg);
+	else
+		_tag_remove(selmon, arg->i > 0);
 }
 
 void
