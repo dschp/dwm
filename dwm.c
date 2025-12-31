@@ -81,6 +81,9 @@ typedef union {
 	tag_t t;
 	float f;
 	const void *v;
+	struct {
+		short s1, s2;
+	} s;
 } Arg;
 
 typedef struct {
@@ -491,7 +494,7 @@ _class_tail()
 }
 
 void
-_tag_insert(Monitor *m, int relative, int append, int attach_sel)
+_tag_insert(Monitor *m, int relative, int append, int tag_sel)
 {
 	int pos = 0;
 	if (relative) {
@@ -532,7 +535,7 @@ _tag_insert(Monitor *m, int relative, int append, int attach_sel)
 	m->curtags = TAG_UNIT << pos;
 	m->viewmode = ViewTag;
 
-	if (attach_sel && m->sel)
+	if (tag_sel && m->sel)
 		m->sel->tags = m->curtags;
 
 	focus(NULL);
@@ -1785,7 +1788,7 @@ group_append(const Arg *arg)
 		_tag_insert(selmon, 0, 1, 1);
 		break;
 	case ViewTag:
-		_tag_insert(selmon, arg->i > 0, 1, 0);
+		_tag_insert(selmon, arg->s.s1 > 0, 1, arg->s.s2 > 0);
 		break;
 	}
 }
@@ -1801,7 +1804,7 @@ group_insert(const Arg *arg)
 		_tag_insert(selmon, 0, 0, 1);
 		break;
 	case ViewTag:
-		_tag_insert(selmon, arg->i > 0, 0, 0);
+		_tag_insert(selmon, arg->s.s1 > 0, 0, arg->s.s2 > 0);
 		break;
 	}
 }
