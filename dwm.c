@@ -208,7 +208,6 @@ static void class_swap(const Arg *arg);
 static void cleanup(void);
 static void cleanupmon(Monitor *mon);
 static void clientmessage(XEvent *e);
-static void client_focus(const Arg *arg);
 static void client_remove_tags(const Arg *arg);
 static void client_select(const Arg *arg);
 static void client_select_urg(const Arg *arg);
@@ -579,54 +578,6 @@ _tag_remove(Monitor *m, int force)
 
 	focus(NULL);
 	arrange(m);
-}
-
-void
-_client_focus(int dir) {
-	Client *sel = selmon->sel;
-	if (!sel || (sel->isfullscreen && LOCKFULLSCREEN))
-		return;
-
-	Client *c = NULL;
-	if (dir > 0) {
-		if (selmon->curcls) {
-			for (c = sel->next; c && c->class != selmon->curcls; c = c->next);
-			if (!c) {
-				for (c = selmon->clients; c && c != sel; c = c->next)
-					if (c->class == selmon->curcls)
-						break;
-			}
-		} else {
-			if (!(c = sel->next))
-				c = selmon->clients;
-		}
-	} else {
-		if (selmon->curcls) {
-			Client *cand = NULL;
-			for (c = selmon->clients; c && c != sel; c = c->next)
-				if (c->class == selmon->curcls)
-					cand = c;
-			if (!cand) {
-				for (c = sel->next; c && c->next; c = c->next)
-					if (c->class == selmon->curcls)
-						cand = c;
-			}
-			c = cand;
-		} else {
-			if (sel == selmon->clients) {
-				if (!sel->next)
-					return;
-				for (c = sel->next; c->next; c = c->next);
-			} else {
-				for (c = selmon->clients; c && c->next != sel; c = c->next);
-			}
-		}
-	}
-
-	if (c && c != sel) {
-		focus(c);
-		arrange(selmon);
-	}
 }
 
 /* function implementations */
@@ -1090,22 +1041,6 @@ clientmessage(XEvent *e)
 }
 
 void
-client_focus(const Arg *arg)
-{
-	if (!arg)
-		return;
-
-	switch (selmon->viewmode) {
-	case ViewClass:
-		_client_focus(arg->i);
-		break;
-	case ViewTag:
-		focusstack(arg);
-		break;
-	}
-}
-
-void
 client_remove_tags(const Arg *arg)
 {
 	if (!selmon->sel || !selmon->sel->tags)
@@ -1177,6 +1112,10 @@ client_select_urg(const Arg *arg)
 		return;
 
 	selmon->viewmode = ViewClass;
+	if (selmon->curcls != c->class) {
+		selmon->prevcls = selmon->curcls;
+		selmon->curcls = c->class;
+	}
 
 	focus(c);
 	arrange(selmon);
