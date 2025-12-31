@@ -61,7 +61,7 @@ static const Rule rules[] = {
 
 static const ClassRule crules[] = {
 	/* class                        rename       nmaster  mfact  showbar  lt_idx */
-	{ "st-256color",                "st",        {     1,   0.5,       1,      1} },
+	{ "st-256color",                "st",        {     1,   0.5,       1,      0} },
 	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      0} },
 	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      0} },
 	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,       1,      0} },
@@ -69,7 +69,6 @@ static const ClassRule crules[] = {
 
 /* preallocated layout params           nmaster  mfact  showbar  lt_idx */
 static LayoutParams default_lt_params = {     1,   0.5,       1,      1 };
-static LayoutParams class_lt_params   = {     1,   0.5,       1,      0 };
 
 /* layouts */
 static const Layout layouts[] = {

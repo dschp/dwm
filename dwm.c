@@ -382,14 +382,14 @@ _layout_params(Monitor *m)
 {
 	switch (m->viewmode) {
 	case ViewClass:
-		return &class_lt_params;
+		if (m->curcls)
+			return &m->curcls->params;
 	case ViewTag:
 		for (Client *c = m->clients; c; c = c->next)
 			if (c->tags & m->curtags)
 				return &c->params;
 		break;
 	}
-
 	return &default_lt_params;
 }
 
