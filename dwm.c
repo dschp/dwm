@@ -2940,10 +2940,9 @@ tag_stack(const Arg *arg)
 		}
 	}
 
-	if (t != selmon->curtags) {
-		selmon->curtags = t;
-		drawbar(selmon);
-	}
+	selmon->curtags = t;
+	selmon->prevtags = 0;
+	drawbar(selmon);
 }
 
 void
@@ -3003,10 +3002,9 @@ tag_swap(const Arg *arg)
 		t = selmon->curtags >> 1;
 	}
 
-	if (t != selmon->curtags) {
-		selmon->curtags = t;
-		drawbar(selmon);
-	}
+	selmon->curtags = t;
+	selmon->prevtags = 0;
+	drawbar(selmon);
 }
 
 void
@@ -3057,12 +3055,16 @@ tag_view(const Arg *arg)
 	else if (!(t = selmon->prevtags))
 		return;
 
-	if (selmon->viewmode == ViewTag && t == selmon->curtags)
-		return;
+	if (selmon->viewmode == ViewTag) {
+		if (t == selmon->curtags)
+			return;
+	} else
+		selmon->viewmode = ViewTag;
 
-	selmon->prevtags = selmon->curtags;
-	selmon->curtags = t;
-	selmon->viewmode = ViewTag;
+	if (t != selmon->curtags) {
+		selmon->prevtags = selmon->curtags;
+		selmon->curtags = t;
+	}
 
 	focus(NULL);
 	arrange(selmon);
