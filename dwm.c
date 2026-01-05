@@ -51,9 +51,8 @@
 #define CLEANMASK(mask)         (mask & ~(numlockmask|LockMask) & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
 #define INTERSECT(x,y,w,h,m)    (MAX(0, MIN((x)+(w),(m)->wx+(m)->ww) - MAX((x),(m)->wx)) \
                                * MAX(0, MIN((y)+(h),(m)->wy+(m)->wh) - MAX((y),(m)->wy)))
-#define ISVISIBLE(C)            (C->mon->viewmode == ViewClass ? C->class == C->mon->curcls \
-								 : C->mon->viewmode == ViewTag ? C->tags & C->mon->curtags \
-								 : 0)
+#define ISVISIBLE(C)            (C->mon->curtags ? C->tags & C->mon->curtags \
+								 : C->class == C->mon->curcls)
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
 #define HEIGHT(X)               ((X)->h + 2 * (X)->bw)
@@ -71,7 +70,6 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkClass, ClkDesktop, ClkTag, ClkLayout, ClkLayoutParam,
 	   ClkClientList, ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
-enum { ViewClass, ViewTag };
 enum { BanishTopLeft, BanishTopRight, BanishBottomLeft, BanishBottomRight };
 
 typedef unsigned long long tag_t;
@@ -168,7 +166,6 @@ struct Monitor {
 	char ltsymbol[16];
 	int topbar;
 	int barmode;
-	int viewmode;
 
 	int x_class_ellipsis_l;
 	int x_class_ellipsis_r;
@@ -217,7 +214,6 @@ static void configure(Client *c);
 static void configurenotify(XEvent *e);
 static void configurerequest(XEvent *e);
 static Monitor *createmon(void);
-static void cycleviewmode(const Arg *arg);
 static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
@@ -380,15 +376,13 @@ int return_code = EXIT_SUCCESS;
 LayoutParams *
 _layout_params(Monitor *m)
 {
-	switch (m->viewmode) {
-	case ViewClass:
-		if (m->curcls)
-			return &m->curcls->params;
-	case ViewTag:
+	if (m->curtags) {
 		for (Client *c = m->clients; c; c = c->next)
 			if (c->tags & m->curtags)
 				return &c->params;
-		break;
+	} else {
+		if (m->curcls)
+			return &m->curcls->params;
 	}
 	return &default_lt_params;
 }
@@ -471,14 +465,15 @@ _class_select(Class *cls)
 	if (!cls) {
 		return;
 	} else if (cls == selmon->curcls) {
-		if (selmon->viewmode == ViewClass)
+		if (!selmon->curtags)
 			return;
 	} else {
 		selmon->prevcls = selmon->curcls;
 		selmon->curcls = cls;
 	}
 
-	selmon->viewmode = ViewClass;
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = 0;
 
 	focus(NULL);
 	arrange(selmon);
@@ -532,7 +527,6 @@ _tag_insert(Monitor *m, int relative, int append, int tag_sel)
 
 	m->prevtags = m->curtags;
 	m->curtags = TAG_UNIT << pos;
-	m->viewmode = ViewTag;
 
 	if (tag_sel && m->sel)
 		m->sel->tags = m->curtags;
@@ -545,7 +539,7 @@ void
 _tag_remove(Monitor *m, int force)
 {
 	tag_t t = m->curtags;
-	if (!t || m->viewmode != ViewTag)
+	if (!t)
 		return;
 
 	if (!force) {
@@ -811,7 +805,8 @@ buttonpress(XEvent *e)
 			if (!urgentclick[i].x)
 				break;
 			if (ev->x < urgentclick[i].x) {
-				selmon->viewmode = ViewClass;
+				selmon->prevtags = selmon->curtags;
+				selmon->curtags = 0;
 				focus(urgentclick[i].c);
 				arrange(selmon);
 				return;
@@ -1047,7 +1042,7 @@ client_remove_tags(const Arg *arg)
 		return;
 
 	selmon->sel->tags = 0;
-	if (selmon->viewmode == ViewTag) {
+	if (selmon->curtags) {
 		focus(NULL);
 		arrange(selmon);
 	} else {
@@ -1111,7 +1106,8 @@ client_select_urg(const Arg *arg)
 	if (!c)
 		return;
 
-	selmon->viewmode = ViewClass;
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = 0;
 	if (selmon->curcls != c->class) {
 		selmon->prevcls = selmon->curcls;
 		selmon->curcls = c->class;
@@ -1294,29 +1290,8 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	m->topbar = TOPBAR;
-	m->viewmode = ViewClass;
 
 	return m;
-}
-
-void
-cycleviewmode(const Arg *arg)
-{
-	switch (selmon->viewmode) {
-	case ViewClass:
-		if (!selmon->curtags)
-			return;
-		selmon->viewmode = ViewTag;
-		break;
-	case ViewTag:
-		if (!selmon->curcls)
-			return;
-		selmon->viewmode = ViewClass;
-		break;
-	}
-
-	focus(NULL);
-	arrange(selmon);
 }
 
 void
@@ -1450,7 +1425,7 @@ drawbar(Monitor *m)
 		drw_setscheme(drw, scheme[SchemeClass]);
 		int bar_i = 0;
 		for (i = 0; cls && i < BAR_CLASS_MAX; cls = cls->next, i++, bar_i++) {
-			int invert = m->viewmode == ViewClass && cls == m->curcls;
+			int invert = !m->curtags && cls == m->curcls;
 			drw_text(drw, x, 0, cls->w_name, bh, lrpad_2, cls->name, invert);
 			if (m->sel && m->sel->class == cls)
 				drw_rect(drw, x + boxs, boxs, boxw, boxw, 1, invert);
@@ -1478,7 +1453,7 @@ drawbar(Monitor *m)
 	}
 	if (x > m->mw) goto draw;
 
-	tag_t t = m->viewmode == ViewTag ? m->curtags | occ : occ;
+	tag_t t = m->curtags ? m->curtags | occ : occ;
 	const int tag_cnt = t == 0 ? 0 : (int)log2(t) + 1;
 	if (t) {
 		drw_setscheme(drw, scheme[SchemeNormal]);
@@ -1514,7 +1489,7 @@ drawbar(Monitor *m)
 		tag_t t = TAG_UNIT << start;
 		int bar_i = 0;
 		for (i = start; i < end; i++, t <<= 1, bar_i++) {
-			int is_selected = m->viewmode == ViewTag && t & m->curtags;
+			int is_selected = m->curtags && t & m->curtags;
 			int s_idx = t & occ || is_selected ? SchemeTag : SchemeNormal;
 			int invert = is_selected;
 			int draw_box = m->sel && t & m->sel->tags;
@@ -1591,9 +1566,7 @@ drawbar(Monitor *m)
 
 	const int w_rest_area = m->mw - x;
 	if (w_rest_area > 100 && c_cnt > 0) {
-		const int s_idx = m->viewmode == ViewClass ? SchemeClass
-			: m->viewmode == ViewTag ? SchemeTag
-			: SchemeNormal;
+		const int s_idx = m->curtags ? SchemeTag : SchemeClass;
 
 		c = m->clients;
 		i = 0;
@@ -1706,13 +1679,10 @@ drawbars(void)
 void
 group_adjacent(const Arg *arg)
 {
-	switch (selmon->viewmode) {
-	case ViewClass:
+	if (!selmon->curtags) {
 		class_adjacent(arg);
-		break;
-	case ViewTag:
+	} else {
 		tag_adjacent(arg);
-		break;
 	}
 }
 
@@ -1722,13 +1692,10 @@ group_append(const Arg *arg)
 	if (!arg)
 		return;
 
-	switch (selmon->viewmode) {
-	case ViewClass:
+	if (!selmon->curtags) {
 		_tag_insert(selmon, 0, 1, 1);
-		break;
-	case ViewTag:
+	} else {
 		_tag_insert(selmon, arg->s.s1 > 0, 1, arg->s.s2 > 0);
-		break;
 	}
 }
 
@@ -1738,52 +1705,69 @@ group_insert(const Arg *arg)
 	if (!arg)
 		return;
 
-	switch (selmon->viewmode) {
-	case ViewClass:
+	if (!selmon->curtags) {
 		_tag_insert(selmon, 0, 0, 1);
-		break;
-	case ViewTag:
+	} else {
 		_tag_insert(selmon, arg->s.s1 > 0, 0, arg->s.s2 > 0);
-		break;
 	}
 }
 
 void
 group_select(const Arg *arg)
 {
-	switch (selmon->viewmode) {
-	case ViewClass:
-		class_select(arg);
-		break;
-	case ViewTag:
-		tag_select(arg);
-		break;
+	if (!arg)
+		return;
+
+	if (arg->i) {
+		if (!selmon->curtags) {
+			class_select(arg);
+		} else {
+			tag_select(arg);
+		}
+		return;
 	}
+
+	if (!selmon->curtags) {
+		if (selmon->prevtags) {
+			selmon->curtags = selmon->prevtags;
+			selmon->prevtags = 0;
+		} else if (selmon->prevcls) {
+			Class *c = selmon->curcls;
+			selmon->curcls = selmon->prevcls;
+			selmon->prevcls = c;
+		} else
+			return;
+	} else if (selmon->prevtags) {
+		tag_t t = selmon->curtags;
+		selmon->curtags = selmon->prevtags;
+		selmon->prevtags = t;
+	} else if (selmon->curcls) {
+		selmon->prevtags = selmon->curtags;
+		selmon->curtags = 0;
+	} else
+		return;
+
+	focus(NULL);
+	arrange(selmon);
 }
 
 void
 group_stack(const Arg *arg)
 {
-	switch (selmon->viewmode) {
-	case ViewClass:
+	if (!selmon->curtags) {
 		class_stack(arg);
-		break;
-	case ViewTag:
+	} else {
 		tag_stack(arg);
-		break;
 	}
 }
 
 void
 group_swap(const Arg *arg)
 {
-	switch (selmon->viewmode) {
-	case ViewClass:
+	if (!selmon->curtags) {
 		class_swap(arg);
-		break;
-	case ViewTag:
+	} else {
 		tag_swap(arg);
-		break;
 	}
 }
 
@@ -2099,21 +2083,16 @@ manage(Window w, XWindowAttributes *wa)
 			c->mon = selmon;
 			applyrules(c, class, instance);
 
-			switch (c->mon->viewmode) {
-			case ViewClass:
+			if (!c->mon->curtags) {
 				if (c->mon->curcls != c->class) {
 					c->mon->prevcls = c->mon->curcls;
 					c->mon->curcls = c->class;
 				}
 				c->params = c->class->params;
-				break;
-			case ViewTag:
+			} else {
 				if (!c->tags)
 					c->tags = c->mon->curtags;
 				c->params = c->mon->sel ? c->mon->sel->params : c->class->params;
-				break;
-			default:
-				c->params = c->class->params;
 			}
 		}
 
@@ -2814,7 +2793,7 @@ tagmon(const Arg *arg)
 void
 tag_adjacent(const Arg *arg)
 {
-	if (!arg || selmon->viewmode != ViewTag)
+	if (!arg || !selmon->curtags)
 		return;
 
 	selmon->prevtags = selmon->curtags;
@@ -2823,8 +2802,6 @@ tag_adjacent(const Arg *arg)
 	} else {
 		selmon->curtags >>= 1;
 	}
-
-	selmon->viewmode = selmon->curtags ? ViewTag : ViewClass;
 
 	focus(NULL);
 	arrange(selmon);
@@ -2863,7 +2840,6 @@ tag_select(const Arg *arg)
 
 	selmon->prevtags = selmon->curtags;
 	selmon->curtags = t;
-	selmon->viewmode = ViewTag;
 
 	focus(NULL);
 	arrange(selmon);
@@ -2877,7 +2853,7 @@ tag_set(const Arg *arg)
 
 	selmon->sel->tags = arg->t;
 
-	if (selmon->viewmode == ViewTag) {
+	if (selmon->curtags) {
 		focus(NULL);
 		arrange(selmon);
 	} else {
@@ -2888,7 +2864,7 @@ tag_set(const Arg *arg)
 void
 tag_stack(const Arg *arg)
 {
-	if (!arg || selmon->viewmode != ViewTag)
+	if (!arg || !selmon->curtags)
 		return;
 
 	tag_t t = selmon->curtags;
@@ -2948,11 +2924,8 @@ tag_stack(const Arg *arg)
 void
 tag_swap(const Arg *arg)
 {
-	if (!arg || selmon->viewmode != ViewTag)
-		return;
-
 	tag_t t = selmon->curtags;
-	if (!t)
+	if (!arg || !t)
 		return;
 
 	if (arg->i > 0) {
@@ -3015,7 +2988,7 @@ tag_toggle_c(const Arg *arg)
 
 	selmon->sel->tags ^= arg->t;
 
-	if (selmon->viewmode == ViewTag && !(selmon->curtags & selmon->sel->tags)) {
+	if (selmon->curtags && !(selmon->curtags & selmon->sel->tags)) {
 		focus(NULL);
 		arrange(selmon);
 	} else {
@@ -3030,14 +3003,13 @@ tag_toggle_m(const Arg *arg)
 		return;
 
 	tag_t t;
-	if (selmon->viewmode == ViewTag)
+	if (selmon->curtags)
 		t = selmon->curtags ^ arg->t;
 	else
 		t = selmon->curtags | arg->t;
 
 	selmon->prevtags = selmon->curtags;
 	selmon->curtags = t;
-	selmon->viewmode = t ? ViewTag : ViewClass;
 
 	focus(NULL);
 	arrange(selmon);
@@ -3055,11 +3027,8 @@ tag_view(const Arg *arg)
 	else if (!(t = selmon->prevtags))
 		return;
 
-	if (selmon->viewmode == ViewTag) {
-		if (t == selmon->curtags)
-			return;
-	} else
-		selmon->viewmode = ViewTag;
+	if (selmon->curtags && t == selmon->curtags)
+		return;
 
 	if (t != selmon->curtags) {
 		selmon->prevtags = selmon->curtags;
