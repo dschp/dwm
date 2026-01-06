@@ -1693,7 +1693,7 @@ group_append(const Arg *arg)
 		return;
 
 	if (!selmon->curtags) {
-		_tag_insert(selmon, 0, 1, 1);
+		_tag_insert(selmon, 0, 1, arg->s.s2 > 0);
 	} else {
 		_tag_insert(selmon, arg->s.s1 > 0, 1, arg->s.s2 > 0);
 	}
@@ -1706,7 +1706,7 @@ group_insert(const Arg *arg)
 		return;
 
 	if (!selmon->curtags) {
-		_tag_insert(selmon, 0, 0, 1);
+		_tag_insert(selmon, 0, 0, arg->s.s2 > 0);
 	} else {
 		_tag_insert(selmon, arg->s.s1 > 0, 0, arg->s.s2 > 0);
 	}
