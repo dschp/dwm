@@ -488,6 +488,23 @@ _class_tail()
 }
 
 void
+_client_show(Client *c)
+{
+	if (!c)
+		return;
+
+	selmon->prevtags = selmon->curtags;
+	selmon->curtags = 0;
+	if (selmon->curcls != c->class) {
+		selmon->prevcls = selmon->curcls;
+		selmon->curcls = c->class;
+	}
+
+	focus(c);
+	arrange(selmon);
+}
+
+void
 _tag_insert(Monitor *m, int relative, int append, int tag_sel)
 {
 	int pos = 0;
@@ -805,10 +822,7 @@ buttonpress(XEvent *e)
 			if (!urgentclick[i].x)
 				break;
 			if (ev->x < urgentclick[i].x) {
-				selmon->prevtags = selmon->curtags;
-				selmon->curtags = 0;
-				focus(urgentclick[i].c);
-				arrange(selmon);
+				_client_show(urgentclick[i].c);
 				return;
 			}
 		}
@@ -1101,20 +1115,10 @@ client_select_urg(const Arg *arg)
 {
 	Client *c;
 	for (c = selmon->stack; c; c = c->snext)
-		if (c->isurgent)
-			break;
-	if (!c)
-		return;
-
-	selmon->prevtags = selmon->curtags;
-	selmon->curtags = 0;
-	if (selmon->curcls != c->class) {
-		selmon->prevcls = selmon->curcls;
-		selmon->curcls = c->class;
-	}
-
-	focus(c);
-	arrange(selmon);
+		if (c->isurgent) {
+			_client_show(c);
+			return;
+		}
 }
 
 void
