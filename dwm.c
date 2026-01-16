@@ -797,7 +797,7 @@ buttonpress(XEvent *e)
 		if (ev->x < selmon->x_tag_ellipsis_l) {
 			if (ev->button == Button1) {
 				arg.t = selmon->tag_ellipsis_l;
-				tag_select(&arg);
+				tag_view(&arg);
 			}
 			return;
 		}
@@ -813,7 +813,7 @@ buttonpress(XEvent *e)
 		if (ev->x < selmon->x_tag_ellipsis_r) {
 			if (ev->button == Button1) {
 				arg.t = selmon->tag_ellipsis_r;
-				tag_select(&arg);
+				tag_view(&arg);
 			}
 			return;
 		}
@@ -1486,8 +1486,7 @@ drawbar(Monitor *m)
 			x += w_ellipsis_l;
 
 			m->x_tag_ellipsis_l = x;
-			int lsb = occ == 0 ? 0 : (int)log2(occ & ~occ);
-			m->tag_ellipsis_l = TAG_UNIT << lsb;
+			m->tag_ellipsis_l = TAG_UNIT;
 		}
 
 		tag_t t = TAG_UNIT << start;
