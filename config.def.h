@@ -8,6 +8,7 @@
 #define BORDER_PX         1     /* border pixel of windows */
 #define SNAP_PX           16    /* snap pixel */
 #define TOPBAR            1     /* 0 means bottom bar */
+#define SHOWBAR           1
 #define BAR_CLASS_MAX     5
 #define BAR_TAG_MAX       10
 #define BAR_CLIENT_MAX    10
@@ -60,15 +61,15 @@ static const Rule rules[] = {
 };
 
 static const ClassRule crules[] = {
-	/* class                        rename       nmaster  mfact  showbar  lt_idx */
-	{ "st-256color",                "st",        {     1,   0.5,       1,      0} },
-	{ "firefox",                    "Firefox",   {     1,   0.5,       1,      0} },
-	{ "Brave-browser",              "Brave",     {     1,   0.5,       1,      0} },
-	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,       1,      0} },
+	/* class                        rename       nmaster  mfact  lt_idx */
+	{ "st-256color",                "st",        {     1,   0.5,      0} },
+	{ "firefox",                    "Firefox",   {     1,   0.5,      0} },
+	{ "Brave-browser",              "Brave",     {     1,   0.5,      0} },
+	{ "install4j-jclient-Launcher", "Java",      {     1,   0.5,      0} },
 };
 
-/* preallocated layout params           nmaster  mfact  showbar  lt_idx */
-static LayoutParams default_lt_params = {     1,   0.5,       1,      1 };
+/* preallocated layout params           nmaster  mfact  lt_idx */
+static LayoutParams default_lt_params = {     1,   0.5,      1 };
 
 /* layouts */
 static const Layout layouts[] = {
@@ -130,10 +131,7 @@ static const Key keys[] = {
 	{ MODKEY,                    XK_space,      togglefloating,       {0} },
 	{ MODKEY,                    XK_slash,      togglebar,            {0} },
 	{ MODKEY,                   XK_period,      client_select_urg,    {0} },
-	{ MODKEY,                    XK_grave,      banish_pointer,       {.i = BanishTopLeft    } },
-	{ MODKEY|ControlMask,        XK_grave,      banish_pointer,       {.i = BanishTopRight   } },
-	{ MODKEY|ShiftMask,          XK_grave,      banish_pointer,       {.i = BanishBottomLeft } },
-	{ MODKEY|Mod1Mask ,          XK_grave,      banish_pointer,       {.i = BanishBottomRight} },
+	{ MODKEY,                    XK_grave,      banish_pointer,       {0} },
 	{ MODKEY,               XK_apostrophe,      setlayout,            {.i =  0} },
 	{ MODKEY,              XK_bracketleft,      setlayout,            {.i =  1} },
 	{ MODKEY,             XK_bracketright,      setlayout,            {.i =  2} },
