@@ -70,7 +70,6 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkClass, ClkDesktop, ClkTag, ClkLayout, ClkLayoutParam,
 	   ClkClientList, ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
-enum { BanishTopLeft, BanishTopRight, BanishBottomLeft, BanishBottomRight };
 
 typedef unsigned long long tag_t;
 
@@ -96,7 +95,6 @@ typedef struct LayoutParams LayoutParams;
 struct LayoutParams {
 	int nmaster;
 	float mfact;
-	uint showbar;
 	uint lt_idx;
 };
 
@@ -165,7 +163,7 @@ struct Monitor {
 
 	char ltsymbol[16];
 	int topbar;
-	int barmode;
+	uint showbar;
 
 	int x_class_ellipsis_l;
 	int x_class_ellipsis_r;
@@ -733,21 +731,20 @@ attachstack(Client *c)
 void
 banish_pointer(const Arg *arg)
 {
-	if (!arg)
+	Window w, w2;
+	int x, y, x2, y2;
+	unsigned int mask;
+
+	if (!XQueryPointer(dpy, root, &w, &w2, &x, &y, &x2, &y2, &mask))
 		return;
 
-	int x = 0, y = 0;
-	switch (arg->i) {
-	case BanishTopRight:
+	if (x == 0 && (y == 0 || y == (selmon->mh - 1))) {
 		x = selmon->mw;
-		break;
-	case BanishBottomLeft:
+	} else if (x == (selmon->mw - 1) && y == 0) {
+		x = 0;
 		y = selmon->mh;
-		break;
-	case BanishBottomRight:
-		x = selmon->mw;
-		y = selmon->mh;
-		break;
+	} else {
+		x = y = 0;
 	}
 
 	XWarpPointer(dpy, None, root, 0, 0, 0, 0, x, y);
@@ -1294,6 +1291,7 @@ createmon(void)
 	m = ecalloc(1, sizeof(Monitor));
 	strncpy(m->ltsymbol, layouts[0].symbol, sizeof m->ltsymbol);
 	m->topbar = TOPBAR;
+	m->showbar = SHOWBAR;
 
 	return m;
 }
@@ -1351,10 +1349,10 @@ dirtomon(int dir)
 void
 drawbar(Monitor *m)
 {
-	LayoutParams *p = _layout_params(m);
-	if (!p->showbar)
+	if (!m || !m->showbar)
 		return;
 
+	LayoutParams *p = _layout_params(m);
 	int x, w, i;
 	int cls_idx = -1, c_idx = -1;
 	uint boxs = drw->fonts->h / 9;
@@ -3092,8 +3090,7 @@ tile_r(Monitor *m)
 void
 togglebar(const Arg *arg)
 {
-	LayoutParams *p = _layout_params(selmon);
-	p->showbar = !p->showbar;
+	selmon->showbar = !selmon->showbar;
 	updatebarpos(selmon);
 	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
 	arrange(selmon);
@@ -3198,8 +3195,7 @@ updatebarpos(Monitor *m)
 	m->wy = m->my;
 	m->wh = m->mh;
 
-	LayoutParams *p = _layout_params(m);
-	if (p->showbar) {
+	if (m->showbar) {
 		m->wh -= bh;
 		m->by = m->topbar ? m->wy : m->wy + m->wh;
 		m->wy = m->topbar ? m->wy + bh : m->wy;
