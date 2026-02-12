@@ -61,8 +61,8 @@
 
 /* enums */
 enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
-enum { SchemeNormal, SchemeBorder, SchemeClass, SchemeTag,
-	   SchemeClntLbl, SchemeUrgent,
+enum { SchemeNormal, SchemeClass, SchemeTag,
+	   SchemeClntLbl, SchemeUrgent, SchemeStatus,
 	   SchemeLayout, SchemeNmaster, SchemeMfact }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 	   NetWMFullscreen, NetActiveWindow, NetWMWindowType,
@@ -173,6 +173,7 @@ struct Monitor {
 	tag_t tag_ellipsis_r;
 	int x_layout;
 	int x_layout_param;
+	int x_status_text;
 	int x_client_ellipsis_l;
 	int x_client_ellipsis_r;
 };
@@ -202,6 +203,7 @@ static void class_stack(const Arg *arg);
 static void class_swap(const Arg *arg);
 static void cleanup(void);
 static void cleanupmon(Monitor *mon);
+static void clear_status_text(const Arg *arg);
 static void clientmessage(XEvent *e);
 static void client_remove_tags(const Arg *arg);
 static void client_select(const Arg *arg);
@@ -828,6 +830,10 @@ buttonpress(XEvent *e)
 			click = ClkLayout;
 		} else if (ev->x < selmon->x_layout_param) {
 			click = ClkLayoutParam;
+		} else if (ev->x < selmon->x_status_text) {
+			strcpy(stext, "");
+			drawbar(selmon);
+			return;
 		} else {
 			click = ClkClientList;
 
@@ -1025,6 +1031,13 @@ cleanupmon(Monitor *mon)
 	XUnmapWindow(dpy, mon->barwin);
 	XDestroyWindow(dpy, mon->barwin);
 	free(mon);
+}
+
+void
+clear_status_text(const Arg *arg)
+{
+	strcpy(stext, "");
+	drawbar(selmon);
 }
 
 void
@@ -1565,6 +1578,18 @@ drawbar(Monitor *m)
 	}
 	if (x > m->mw) goto draw;
 
+	if (strlen(stext)) {
+		w = TEXTW(stext);
+		if (w > BAR_STATUS_WIDTH)
+			w = BAR_STATUS_WIDTH;
+
+		drw_setscheme(drw, scheme[SchemeStatus]);
+		drw_text(drw, x, 0, w, bh, lrpad_2, stext, 1);
+
+		x += w;
+		m->x_status_text = x;
+	}
+
 	const int w_rest_area = m->mw - x;
 	if (w_rest_area > 100 && c_cnt > 0) {
 		const int s_idx = m->curtags ? SchemeTag : SchemeClass;
@@ -1819,7 +1844,7 @@ focus(Client *c)
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c, 1);
-		XSetWindowBorder(dpy, c->win, scheme[SchemeBorder][ColBorder].pixel);
+		XSetWindowBorder(dpy, c->win, scheme[m->curtags ? SchemeTag : SchemeClass][ColBorder].pixel);
 		setfocus(c);
 	} else {
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
@@ -3359,6 +3384,7 @@ updatestatus(void)
 {
 	if (!gettextprop(root, XA_WM_NAME, stext, sizeof(stext)))
 		strcpy(stext, "");
+	drawbar(selmon);
 }
 
 

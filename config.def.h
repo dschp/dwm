@@ -15,6 +15,7 @@
 #define BAR_CLIENT_WIDTH  150
 #define BAR_URGENT_MAX    3
 #define BAR_URGENT_WIDTH  100
+#define BAR_STATUS_WIDTH  100
 
 /* appearance */
 static const char *fonts[]          = { "sans-serif:size=11" };
@@ -26,7 +27,8 @@ static const char col_black1[]      = "#000000";
 static const char col_black2[]      = "#191919";
 static const char col_black3[]      = "#2a2a2a";
 static const char col_bdr0[]        = "#242424";
-static const char col_bdr1[]        = "#0090ff";
+static const char col_bdr1[]        = "#00c2ae";
+static const char col_bdr2[]        = "#0090ff";
 static const char col_red[]         = "#f32f7c";
 static const char col_green[]       = "#afff00";
 static const char col_blue[]        = "#00bbff";
@@ -37,11 +39,11 @@ static const char col_dmenu_selbg[] = "#0077cc";
 static const char *colors[][3]      = {
 	/*                   fg            bg            border   */
 	[SchemeNormal]   = { col_white2,   col_black2,   col_bdr0 },
-	[SchemeBorder]   = { col_blue,     col_black1,   col_bdr1 },
 	[SchemeClass]    = { col_emerald,  col_black2,   col_bdr1 },
-	[SchemeTag]      = { col_blue,     col_black2,   col_bdr1 },
-	[SchemeClntLbl]  = { col_white1,   col_black3,   col_bdr1 },
-	[SchemeUrgent]   = { col_white2,   col_black2,   col_bdr1 },
+	[SchemeTag]      = { col_blue,     col_black2,   col_bdr2 },
+	[SchemeClntLbl]  = { col_white1,   col_black3,   col_bdr0 },
+	[SchemeUrgent]   = { col_white2,   col_black2,   col_bdr0 },
+	[SchemeStatus]   = { col_white2,   col_black2,   col_bdr0 },
 	[SchemeLayout]   = { col_green,    col_black2,   col_bdr0 },
 	[SchemeNmaster]  = { col_red,      col_black2,   col_bdr0 },
 	[SchemeMfact]    = { col_yellow,   col_black2,   col_bdr0 },
@@ -130,6 +132,7 @@ static const Key keys[] = {
 	{ MODKEY,                      XK_Tab,      group_select,         {.i =  0} },
 	{ MODKEY,                    XK_space,      togglefloating,       {0} },
 	{ MODKEY,                    XK_slash,      togglebar,            {0} },
+	{ MODKEY,                    XK_comma,      clear_status_text,    {0} },
 	{ MODKEY,                   XK_period,      client_select_urg,    {0} },
 	{ MODKEY,                    XK_grave,      banish_pointer,       {0} },
 	{ MODKEY,               XK_apostrophe,      setlayout,            {.i =  0} },
