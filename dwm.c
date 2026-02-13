@@ -306,7 +306,6 @@ static void zoom(const Arg *arg);
 
 /* variables */
 static const char broken[] = "broken";
-static char stext[500];
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -343,6 +342,7 @@ static Class *classes;
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
+static char stext[BAR_STATUS_LENGTH];
 const char ellipsis_l[] = "<";
 const char ellipsis_r[] = ">";
 const char urgent_v[] = "Urg";
@@ -1036,6 +1036,8 @@ cleanupmon(Monitor *mon)
 void
 clear_status_text(const Arg *arg)
 {
+	if (!strlen(stext))
+		return;
 	strcpy(stext, "");
 	drawbar(selmon);
 }
@@ -1588,6 +1590,9 @@ drawbar(Monitor *m)
 
 		x += w;
 		m->x_status_text = x;
+
+		drw_rect(drw, x, 0, 1, bh, 0, 1);
+		x += 1;
 	}
 
 	const int w_rest_area = m->mw - x;

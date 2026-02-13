@@ -15,6 +15,7 @@
 #define BAR_CLIENT_WIDTH  150
 #define BAR_URGENT_MAX    3
 #define BAR_URGENT_WIDTH  100
+#define BAR_STATUS_LENGTH 100
 #define BAR_STATUS_WIDTH  100
 
 /* appearance */
